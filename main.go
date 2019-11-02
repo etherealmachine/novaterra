@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"math"
-	"math/rand"
 	"time"
+
+	"github.com/ojrac/opensimplex-go"
 
 	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
@@ -22,26 +24,53 @@ import (
 )
 
 type TerrainMaterial struct {
-	material.Material
+	material.Standard
 	terrain *texture.Texture2D
 }
 
 func NewTerrainMaterial() *TerrainMaterial {
 	m := new(TerrainMaterial)
-	m.Init()
-	m.SetShader("terrainShader")
+	blue := math32.ColorName("blue")
+	m.Init("terrainShader", &blue)
+	noise := opensimplex.NewNormalized32(0)
 	var data []float32
 	for y := 0; y < 128; y++ {
 		for x := 0; x < 128; x++ {
-			data = append(data, rand.Float32())
-			data = append(data, rand.Float32())
-			data = append(data, rand.Float32())
-			data = append(data, rand.Float32())
+			data = append(data, math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20))
+			data = append(data, 0)
+			data = append(data, 0)
+			data = append(data, 0)
 		}
 	}
 	m.terrain = texture.NewTexture2DFromData(128, 128, gls.RGBA, gls.FLOAT, gls.RGBA32F, data)
 	m.AddTexture(m.terrain)
+	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
+		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
+		if err != nil {
+			panic(err)
+		}
+		tex.SetRepeat(64, 64)
+		tex.SetWrapS(gls.REPEAT)
+		tex.SetWrapT(gls.REPEAT)
+		m.AddTexture(tex)
+	}
 	return m
+}
+
+func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
+	var maxamp float32 = 0
+	var amp float32 = 1
+	freq := scale
+	var value float32 = 0
+
+	for i := 0; i < iters; i++ {
+		value += noise.Eval2(x*freq, y*freq) * amp
+		maxamp += amp
+		amp *= persistence
+		freq *= 2
+	}
+
+	return value / maxamp
 }
 
 func main() {
@@ -77,8 +106,7 @@ func main() {
 	a.Subscribe(window.OnWindowSize, onResize)
 	onResize("", nil)
 
-	// Create a blue torus and add it to the scene
-	geom := geometry.NewPlane(128, 128)
+	geom := geometry.NewSegmentedPlane(128, 128, 128, 128)
 	mat := NewTerrainMaterial()
 	mesh := graphic.NewMesh(geom, mat)
 	mesh.RotateX(-90 * math.Pi / 180)
