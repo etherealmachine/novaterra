@@ -24,18 +24,23 @@ import (
 	"github.com/g3n/engine/window"
 )
 
+// TerrainMaterial can render and manipulate a heightmap.
 type TerrainMaterial struct {
 	material.Standard
-	terrain              *texture.Texture2D
+	heightTexture        *texture.Texture2D
+	heightmap            []float32
 	uniformBrushPosition gls.Uniform
 	uniformBrushSize     gls.Uniform
 
+	Size          int
 	BrushPosition math32.Vector2
 	BrushSize     float32
 }
 
-func NewTerrainMaterial() *TerrainMaterial {
+// NewTerrainMaterial initializes a terrain with OpenSimplex noise.
+func NewTerrainMaterial(size int) *TerrainMaterial {
 	m := &TerrainMaterial{
+		Size:      size,
 		BrushSize: 0.1,
 	}
 	blue := math32.ColorName("blue")
@@ -43,23 +48,22 @@ func NewTerrainMaterial() *TerrainMaterial {
 	m.uniformBrushPosition.Init("BrushPosition")
 	m.uniformBrushSize.Init("BrushSize")
 	noise := opensimplex.NewNormalized32(0)
-	var data []float32
-	for y := 0; y < 128; y++ {
-		for x := 0; x < 128; x++ {
-			data = append(data, math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20))
-			data = append(data, 0)
-			data = append(data, 0)
-			data = append(data, 0)
+	for y := 0; y < m.Size; y++ {
+		for x := 0; x < m.Size; x++ {
+			m.heightmap = append(m.heightmap, math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20))
+			m.heightmap = append(m.heightmap, 0)
+			m.heightmap = append(m.heightmap, 0)
+			m.heightmap = append(m.heightmap, 0)
 		}
 	}
-	m.terrain = texture.NewTexture2DFromData(128, 128, gls.RGBA, gls.FLOAT, gls.RGBA32F, data)
-	m.AddTexture(m.terrain)
+	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+	m.AddTexture(m.heightTexture)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
 		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
 		if err != nil {
 			panic(err)
 		}
-		tex.SetRepeat(64, 64)
+		tex.SetRepeat(float32(m.Size)/2, float32(m.Size)/2)
 		tex.SetWrapS(gls.REPEAT)
 		tex.SetWrapT(gls.REPEAT)
 		m.AddTexture(tex)
@@ -67,6 +71,26 @@ func NewTerrainMaterial() *TerrainMaterial {
 	return m
 }
 
+// Raise the area under the brush.
+func (m *TerrainMaterial) Raise() {
+	radius := int(m.BrushSize * float32(m.Size))
+	bx := int(m.BrushPosition.X * float32(m.Size))
+	by := int(m.BrushPosition.Y * float32(m.Size))
+	for x := -radius; x <= radius; x++ {
+		for y := -radius; y <= radius; y++ {
+			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
+				i := (by+y)*m.Size*4 + (bx+x)*4
+				if i >= 0 && i < len(m.heightmap) {
+					m.heightmap[i] += 0.1
+				}
+			}
+		}
+	}
+	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+}
+
+// RenderSetup is called before rendering a mesh with the material.
+// It updates shader uniform variables with their Go values.
 func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 	m.Standard.RenderSetup(gl)
 	gl.Uniform2f(m.uniformBrushPosition.Location(gl), m.BrushPosition.X, m.BrushPosition.Y)
@@ -134,8 +158,8 @@ func main() {
 	onResize("", nil)
 
 	geom := geometry.NewSegmentedPlane(128, 128, 128, 128)
-	mat := NewTerrainMaterial()
-	mesh := graphic.NewMesh(geom, mat)
+	terrain := NewTerrainMaterial(128)
+	mesh := graphic.NewMesh(geom, terrain)
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
 
@@ -158,10 +182,27 @@ func main() {
 		mouseY = e.Ypos
 	})
 
+	var mouseDown bool
+	a.SubscribeID(window.OnMouseDown, a, func(evname string, ev interface{}) {
+		e := ev.(*window.MouseEvent)
+		if e.Button == window.MouseButton1 {
+			mouseDown = true
+			gui.Manager().SetCursorFocus(gui.Manager())
+		}
+	})
+
+	a.SubscribeID(window.OnMouseUp, a, func(evname string, ev interface{}) {
+		e := ev.(*window.MouseEvent)
+		if e.Button == window.MouseButton1 {
+			mouseDown = false
+			gui.Manager().SetCursorFocus(nil)
+		}
+	})
+
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
 		a.Gls().WithFramebuffer(func() {
-			mat.SetShader("color")
+			terrain.SetShader("color")
 			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 			if err := renderer.Render(scene, cam); err != nil {
 				panic(err)
@@ -170,13 +211,16 @@ func main() {
 			if c.R == 0.5 && c.G == 0.5 && c.B == 0.5 {
 				return
 			}
-			mat.BrushPosition.X = c.R
-			mat.BrushPosition.Y = c.G
+			terrain.BrushPosition.X = c.R
+			terrain.BrushPosition.Y = c.G
 		})
-		mat.SetShader("terrain")
+		terrain.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
+		}
+		if mouseDown {
+			terrain.Raise()
 		}
 	})
 }
