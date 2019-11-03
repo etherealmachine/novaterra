@@ -35,6 +35,7 @@ type TerrainMaterial struct {
 	Size          int
 	BrushPosition math32.Vector2
 	BrushSize     float32
+	BrushType     string
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
@@ -82,6 +83,25 @@ func (m *TerrainMaterial) Raise() {
 				i := (by+y)*m.Size*4 + (bx+x)*4
 				if i >= 0 && i < len(m.heightmap) {
 					m.heightmap[i] += 0.1
+				}
+			}
+		}
+	}
+	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+}
+
+// Lower the area under the brush.
+func (m *TerrainMaterial) Lower() {
+	radius := int(m.BrushSize * float32(m.Size))
+	bx := int(m.BrushPosition.X * float32(m.Size))
+	by := int(m.BrushPosition.Y * float32(m.Size))
+	for x := -radius; x <= radius; x++ {
+		for y := -radius; y <= radius; y++ {
+			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
+				i := (by+y)*m.Size*4 + (bx+x)*4
+				if i >= 0 && i < len(m.heightmap) {
+					m.heightmap[i] -= 0.1
+					m.heightmap[i] = math32.Max(0, m.heightmap[i])
 				}
 			}
 		}
@@ -163,6 +183,34 @@ func main() {
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
 
+	ui := gui.NewPanel(0, 50)
+	ui.SetPaddings(4, 4, 4, 4)
+	ui.SetLayout(gui.NewDockLayout())
+	ui.SetColor4(&math32.Color4{G: 1.0, A: 0.4})
+	ui.SetLayoutParams(&gui.DockLayoutParams{Edge: gui.DockBottom})
+	scene.Add(ui)
+
+	dock := gui.NewPanel(0, 50)
+	layout := gui.NewHBoxLayout()
+	dock.SetLayout(layout)
+	layout.SetSpacing(10)
+	ui.Add(dock)
+
+	btn := gui.NewButton("Raise")
+	btn.SetSize(40, 40)
+	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
+		terrain.BrushType = "Raise"
+		gui.Manager().SetKeyFocus(gui.Manager())
+	})
+	dock.Add(btn)
+	btn = gui.NewButton("Lower")
+	btn.SetSize(40, 40)
+	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
+		terrain.BrushType = "Lower"
+		gui.Manager().SetKeyFocus(gui.Manager())
+	})
+	dock.Add(btn)
+
 	// Create and add lights to the scene
 	scene.Add(light.NewAmbient(&math32.Color{R: 1, G: 1, B: 1}, 0.8))
 	pointLight := light.NewPoint(&math32.Color{R: 1, G: 1, B: 1}, 1000.0)
@@ -201,6 +249,9 @@ func main() {
 
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		width, _ := a.GetSize()
+		dock.SetWidth(float32(width))
+		ui.SetWidth(float32(width))
 		a.Gls().WithFramebuffer(func() {
 			terrain.SetShader("color")
 			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
@@ -220,7 +271,12 @@ func main() {
 			panic(err)
 		}
 		if mouseDown {
-			terrain.Raise()
+			switch terrain.BrushType {
+			case "Raise":
+				terrain.Raise()
+			case "Lower":
+				terrain.Lower()
+			}
 		}
 	})
 }
