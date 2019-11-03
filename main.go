@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"time"
 
@@ -25,13 +26,22 @@ import (
 
 type TerrainMaterial struct {
 	material.Standard
-	terrain *texture.Texture2D
+	terrain              *texture.Texture2D
+	uniformBrushPosition gls.Uniform
+	uniformBrushSize     gls.Uniform
+
+	BrushPosition math32.Vector2
+	BrushSize     float32
 }
 
 func NewTerrainMaterial() *TerrainMaterial {
-	m := new(TerrainMaterial)
+	m := &TerrainMaterial{
+		BrushSize: 0.1,
+	}
 	blue := math32.ColorName("blue")
-	m.Init("terrainShader", &blue)
+	m.Init("terrain", &blue)
+	m.uniformBrushPosition.Init("BrushPosition")
+	m.uniformBrushSize.Init("BrushSize")
 	noise := opensimplex.NewNormalized32(0)
 	var data []float32
 	for y := 0; y < 128; y++ {
@@ -57,6 +67,12 @@ func NewTerrainMaterial() *TerrainMaterial {
 	return m
 }
 
+func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
+	m.Standard.RenderSetup(gl)
+	gl.Uniform2f(m.uniformBrushPosition.Location(gl), m.BrushPosition.X, m.BrushPosition.Y)
+	gl.Uniform1f(m.uniformBrushSize.Location(gl), m.BrushSize)
+}
+
 func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
 	var maxamp float32 = 0
 	var amp float32 = 1
@@ -78,9 +94,20 @@ func main() {
 	// Create application and scene
 	a := app.App()
 
-	a.Renderer().AddShader("terrainVertexShader", terrainVertexShader)
-	a.Renderer().AddShader("terrainFragmentShader", terrainFragmentShader)
-	a.Renderer().AddProgram("terrainShader", "terrainVertexShader", "terrainFragmentShader")
+	files, err := ioutil.ReadDir("shaders")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, f := range files {
+		b, err := ioutil.ReadFile(fmt.Sprintf("shaders/%s", f.Name()))
+		if err != nil {
+			panic(err)
+		}
+		a.Renderer().AddShader(f.Name(), string(b))
+	}
+	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
+	a.Renderer().AddProgram("color", "terrain.vert", "color.frag")
 
 	scene := core.NewNode()
 
@@ -124,8 +151,29 @@ func main() {
 	// Set background color to gray
 	a.Gls().ClearColor(0.5, 0.5, 0.5, 1.0)
 
+	var mouseX, mouseY float32
+	a.SubscribeID(window.OnCursor, a, func(evname string, ev interface{}) {
+		e := ev.(*window.CursorEvent)
+		mouseX = e.Xpos
+		mouseY = e.Ypos
+	})
+
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		a.Gls().WithFramebuffer(func() {
+			mat.SetShader("color")
+			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+			if err := renderer.Render(scene, cam); err != nil {
+				panic(err)
+			}
+			c := a.Gls().ReadPixels(int(mouseX), int(mouseY), 1, 1)[0][0]
+			if c.R == 0.5 && c.G == 0.5 && c.B == 0.5 {
+				return
+			}
+			mat.BrushPosition.X = c.R
+			mat.BrushPosition.Y = c.G
+		})
+		mat.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
