@@ -20,22 +20,23 @@ import (
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/texture"
-	"github.com/g3n/engine/util/helper"
 	"github.com/g3n/engine/window"
 )
 
 // TerrainMaterial can render and manipulate a heightmap.
 type TerrainMaterial struct {
 	material.Standard
-	heightTexture        *texture.Texture2D
-	heightmap            []float32
-	uniformBrushPosition gls.Uniform
-	uniformBrushSize     gls.Uniform
+	heightTexture         *texture.Texture2D
+	heightmap             []float32
+	uniformCameraPosition gls.Uniform
+	uniformBrushPosition  gls.Uniform
+	uniformBrushSize      gls.Uniform
 
-	Size          int
-	BrushPosition math32.Vector2
-	BrushSize     float32
-	BrushType     string
+	CameraPosition math32.Vector3
+	Size           int
+	BrushPosition  math32.Vector2
+	BrushSize      float32
+	BrushType      string
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
@@ -46,6 +47,7 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	}
 	blue := math32.ColorName("blue")
 	m.Init("terrain", &blue)
+	m.uniformCameraPosition.Init("CameraPosition")
 	m.uniformBrushPosition.Init("BrushPosition")
 	m.uniformBrushSize.Init("BrushSize")
 	noise := opensimplex.NewNormalized32(0)
@@ -109,10 +111,29 @@ func (m *TerrainMaterial) Lower() {
 	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
 }
 
+// Water the area under the brush.
+func (m *TerrainMaterial) Water() {
+	radius := int(m.BrushSize * float32(m.Size))
+	bx := int(m.BrushPosition.X * float32(m.Size))
+	by := int(m.BrushPosition.Y * float32(m.Size))
+	for x := -radius; x <= radius; x++ {
+		for y := -radius; y <= radius; y++ {
+			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
+				i := (by+y)*m.Size*4 + (bx+x)*4 + 1
+				if i >= 0 && i < len(m.heightmap) {
+					m.heightmap[i] += 0.1
+				}
+			}
+		}
+	}
+	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+}
+
 // RenderSetup is called before rendering a mesh with the material.
 // It updates shader uniform variables with their Go values.
 func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 	m.Standard.RenderSetup(gl)
+	gl.Uniform3f(m.uniformCameraPosition.Location(gl), m.CameraPosition.X, m.CameraPosition.Y, m.CameraPosition.Z)
 	gl.Uniform2f(m.uniformBrushPosition.Location(gl), m.BrushPosition.X, m.BrushPosition.Y)
 	gl.Uniform1f(m.uniformBrushSize.Location(gl), m.BrushSize)
 }
@@ -210,15 +231,19 @@ func main() {
 		gui.Manager().SetKeyFocus(gui.Manager())
 	})
 	dock.Add(btn)
+	btn = gui.NewButton("Water")
+	btn.SetSize(40, 40)
+	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
+		terrain.BrushType = "Water"
+		gui.Manager().SetKeyFocus(gui.Manager())
+	})
+	dock.Add(btn)
 
 	// Create and add lights to the scene
 	scene.Add(light.NewAmbient(&math32.Color{R: 1, G: 1, B: 1}, 0.8))
-	pointLight := light.NewPoint(&math32.Color{R: 1, G: 1, B: 1}, 1000.0)
-	pointLight.SetPosition(1, 0, 50)
-	scene.Add(pointLight)
-
-	// Create and add an axis helper to the scene
-	scene.Add(helper.NewAxes(0.5))
+	dir1 := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
+	dir1.SetPosition(0, 0, 1)
+	scene.Add(dir1)
 
 	// Set background color to gray
 	a.Gls().ClearColor(0.5, 0.5, 0.5, 1.0)
@@ -249,6 +274,7 @@ func main() {
 
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		terrain.CameraPosition = cam.Position()
 		width, _ := a.GetSize()
 		dock.SetWidth(float32(width))
 		ui.SetWidth(float32(width))
@@ -276,6 +302,8 @@ func main() {
 				terrain.Raise()
 			case "Lower":
 				terrain.Lower()
+			case "Water":
+				terrain.Water()
 			}
 		}
 	})

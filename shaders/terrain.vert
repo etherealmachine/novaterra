@@ -6,13 +6,37 @@ uniform mat4 ModelViewMatrix;
 uniform mat3 NormalMatrix;
 uniform mat4 MVP;
 
+uniform vec3 CameraPosition;
+
+out vec4 Position;
+out vec3 Normal;
+out vec3 CamDir;
 out vec2 FragTexcoord;
 out float Height;
+out float WaterHeight;
+
+float height(vec2 pos) {
+	Height = texture(MatTexture[0], pos).x;
+	WaterHeight = texture(MatTexture[0], pos).y;
+	return Height + WaterHeight;
+}
 
 void main() {
+  float hL = height(vec2(VertexTexcoord.x - 1.0/128.0, VertexTexcoord.y));
+  float hR = height(vec2(VertexTexcoord.x + 1.0/128.0, VertexTexcoord.y));
+  float hU = height(vec2(VertexTexcoord.x, VertexTexcoord.y - 1.0/128.0));
+  float hD = height(vec2(VertexTexcoord.x, VertexTexcoord.y + 1.0/128.0));
+  Normal.x = hL - hR;
+  Normal.y = hD - hU;
+  Normal.z = 2.0;
+  Normal = normalize(Normal);
+
 	FragTexcoord = VertexTexcoord;
 	Height = texture(MatTexture[0], VertexTexcoord).x;
+	WaterHeight = texture(MatTexture[0], VertexTexcoord).y;
 	vec3 pos = VertexPosition;
-	pos.z += Height;
+	pos.z += Height + WaterHeight;
+	CamDir = normalize(-MVP*vec4(CameraPosition, 1.0)).xyz;
 	gl_Position = MVP * vec4(pos, 1.0);
+	Position = gl_Position;
 }

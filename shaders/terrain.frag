@@ -1,12 +1,18 @@
+#include <lights>
 #include <material>
+#include <phong_model>
 
 precision highp float;
 
 uniform vec2 BrushPosition;
 uniform float BrushSize;
 
+in vec4 Position;
+in vec3 Normal;
+in vec3 CamDir;
 in vec2 FragTexcoord;
 in float Height;
+in float WaterHeight;
 
 out vec4 FragColor;
 void main() {
@@ -43,9 +49,21 @@ void main() {
 		stop1 = 30;
 		stop2 = 1000;
 	}
-	lerp = (Height - stop1) / (stop2 - stop1);
-	FragColor = c1 * (1 - lerp) + c2 * lerp;
-	if (distance(BrushPosition, FragTexcoord) < BrushSize) {
-		FragColor *= 1.2;
+
+	vec4 ambient;
+	if (WaterHeight > 0) {
+		ambient = texture(MatTexture[1], FragTexcoord * MatTexRepeat(1) + MatTexOffset(1));
+	} else {
+		lerp = (Height - stop1) / (stop2 - stop1);
+		ambient = c1 * (1 - lerp) + c2 * lerp;
 	}
+	if (distance(BrushPosition, FragTexcoord) < BrushSize) {
+		ambient *= 1.2;
+	}
+
+	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
+	vec3 Ambdiff, Spec;
+	phongModel(Position, Normal, CamDir, ambient.rgb, 0.5*ambient.rgb, Ambdiff, Spec);
+	// Final fragment color
+	FragColor = min(vec4(Ambdiff + Spec, ambient.a), vec4(1.0));
 }
