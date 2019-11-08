@@ -50,20 +50,27 @@ void main() {
 		stop2 = 1000;
 	}
 
-	vec4 ambient;
-	if (WaterHeight > 0) {
-		ambient = texture(MatTexture[1], FragTexcoord * MatTexRepeat(1) + MatTexOffset(1));
+	vec4 diffuse;
+	if (Height <= 0.1 || WaterHeight > 0) {
+		diffuse = texture(MatTexture[1], FragTexcoord * MatTexRepeat(1) + MatTexOffset(1));
 	} else {
 		lerp = (Height - stop1) / (stop2 - stop1);
-		ambient = c1 * (1 - lerp) + c2 * lerp;
+		diffuse = c1 * (1 - lerp) + c2 * lerp;
 	}
 	if (distance(BrushPosition, FragTexcoord) < BrushSize) {
-		ambient *= 1.2;
+		diffuse *= 1.2;
 	}
+
+	vec3 FlatNormal = normalize(cross(dFdx(Position).xyz, dFdy(Position).xyz));
 
 	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
 	vec3 Ambdiff, Spec;
-	phongModel(Position, Normal, CamDir, ambient.rgb, 0.5*ambient.rgb, Ambdiff, Spec);
+	phongModel(Position, FlatNormal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
+
+	if (Height > 0.1 && WaterHeight <= 0) {
+		Spec = vec3(0.0);
+	}
+
 	// Final fragment color
-	FragColor = min(vec4(Ambdiff + Spec, ambient.a), vec4(1.0));
+	FragColor = min(vec4(Ambdiff + Spec, 1.0), vec4(1.0));
 }

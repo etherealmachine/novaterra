@@ -27,6 +27,7 @@ import (
 type TerrainMaterial struct {
 	material.Standard
 	heightTexture         *texture.Texture2D
+	nextHeightTexture     *texture.Texture2D
 	heightmap             []float32
 	uniformCameraPosition gls.Uniform
 	uniformBrushPosition  gls.Uniform
@@ -60,6 +61,7 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 		}
 	}
 	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+	m.nextHeightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
 	m.AddTexture(m.heightTexture)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
 		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
@@ -173,6 +175,7 @@ func main() {
 	}
 	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
 	a.Renderer().AddProgram("color", "terrain.vert", "color.frag")
+	a.Renderer().AddProgram("compute", "compute.vert", "compute.frag")
 
 	scene := core.NewNode()
 
@@ -184,19 +187,14 @@ func main() {
 	cam.SetPosition(0, 0, 100)
 	scene.Add(cam)
 
+	// Get framebuffer size and update viewport accordingly
+	width, height := a.GetFramebufferSize()
+	a.Gls().Viewport(0, 0, int32(width), int32(height))
+	// Update the camera's aspect ratio
+	cam.SetAspect(float32(width) / float32(height))
+
 	// Set up orbit control for the camera
 	camera.NewOrbitControl(cam)
-
-	// Set up callback to update viewport and camera aspect ratio when the window is resized
-	onResize := func(evname string, ev interface{}) {
-		// Get framebuffer size and update viewport accordingly
-		width, height := a.GetSize()
-		a.Gls().Viewport(0, 0, int32(width), int32(height))
-		// Update the camera's aspect ratio
-		cam.SetAspect(float32(width) / float32(height))
-	}
-	a.Subscribe(window.OnWindowSize, onResize)
-	onResize("", nil)
 
 	geom := geometry.NewSegmentedPlane(128, 128, 128, 128)
 	terrain := NewTerrainMaterial(128)
@@ -239,11 +237,19 @@ func main() {
 	})
 	dock.Add(btn)
 
-	// Create and add lights to the scene
+	yellow := math32.ColorName("yellow")
+	orb := graphic.NewMesh(
+		geometry.NewSphere(1, 100, 100),
+		material.NewStandard(&yellow),
+	)
+	scene.Add(orb)
+
+	dir := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
+	dir.SetPosition(10, 50, 0)
+	dir.SetDirection(0, -1, 0)
+	orb.SetPosition(10, 50, 0)
+	scene.Add(dir)
 	scene.Add(light.NewAmbient(&math32.Color{R: 1, G: 1, B: 1}, 0.8))
-	dir1 := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
-	dir1.SetPosition(0, 0, 1)
-	scene.Add(dir1)
 
 	// Set background color to gray
 	a.Gls().ClearColor(0.5, 0.5, 0.5, 1.0)
@@ -251,8 +257,9 @@ func main() {
 	var mouseX, mouseY float32
 	a.SubscribeID(window.OnCursor, a, func(evname string, ev interface{}) {
 		e := ev.(*window.CursorEvent)
-		mouseX = e.Xpos
-		mouseY = e.Ypos
+		scaleX, scaleY := a.GetScale()
+		mouseX = e.Xpos * float32(scaleX)
+		mouseY = e.Ypos * float32(scaleY)
 	})
 
 	var mouseDown bool
@@ -272,13 +279,38 @@ func main() {
 		}
 	})
 
-	// Run the application
-	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
-		terrain.CameraPosition = cam.Position()
-		width, _ := a.GetSize()
+	// Set up callback to update viewport and camera aspect ratio when the window is resized
+	onResize := func(evname string, ev interface{}) {
+		// Get framebuffer size and update viewport accordingly
+		width, height := a.GetFramebufferSize()
+		a.Gls().Viewport(0, 0, int32(width), int32(height))
+		// Update the camera's aspect ratio
+		cam.SetAspect(float32(width) / float32(height))
+
+		// Update UI size
 		dock.SetWidth(float32(width))
 		ui.SetWidth(float32(width))
+	}
+	a.Subscribe(window.OnWindowSize, onResize)
+	onResize("", nil)
+
+	// Run the application
+	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		// Update camera position
+		terrain.CameraPosition = cam.Position()
+
+		// Compute shader pass
+		m.nextHeightTexture.Render(a.Gls())
+		a.Gls().WithTexture(m.nextHeightTexture, func() {
+			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+			if err := renderer.Render(scene, cam); err != nil {
+				panic(err)
+			}
+		})
+
+		// Color-based mouse-picking shader pass
 		a.Gls().WithFramebuffer(func() {
+			orb.SetVisible(false)
 			terrain.SetShader("color")
 			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 			if err := renderer.Render(scene, cam); err != nil {
@@ -291,11 +323,16 @@ func main() {
 			terrain.BrushPosition.X = c.R
 			terrain.BrushPosition.Y = c.G
 		})
+
+		// Standard render pass
+		orb.SetVisible(true)
 		terrain.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
 		}
+
+		// User interaction
 		if mouseDown {
 			switch terrain.BrushType {
 			case "Raise":

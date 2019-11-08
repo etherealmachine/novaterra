@@ -29,14 +29,14 @@ void main() {
   Normal.x = hL - hR;
   Normal.y = hD - hU;
   Normal.z = 2.0;
-  Normal = normalize(Normal);
+  Normal = normalize(NormalMatrix * Normal);
 
 	FragTexcoord = VertexTexcoord;
 	Height = texture(MatTexture[0], VertexTexcoord).x;
 	WaterHeight = texture(MatTexture[0], VertexTexcoord).y;
 	vec3 pos = VertexPosition;
 	pos.z += Height + WaterHeight;
-	CamDir = normalize(-MVP*vec4(CameraPosition, 1.0)).xyz;
+	Position = ModelViewMatrix * vec4(pos, 1.0);
 	gl_Position = MVP * vec4(pos, 1.0);
-	Position = gl_Position;
+	CamDir = normalize(-(ModelViewMatrix * vec4(CameraPosition, 1.0)).xyz);
 }
