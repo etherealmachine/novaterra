@@ -332,9 +332,9 @@ func main() {
 	onResize("", nil)
 
 	computeScene := core.NewNode()
-	computeScene.Add(
-		graphic.NewMesh(
-			geometry.NewPlane(float32(terrain.Size), float32(terrain.Size)), terrain))
+	computeCam := camera.NewOrthographic(1.0, 0, 1.0, 2.0, camera.Vertical)
+	computeScene.Add(graphic.NewMesh(geometry.NewPlane(2, 2), terrain))
+	computeScene.Add(computeCam)
 
 	fb2 := a.Gls().GenerateFramebuffer()
 	depthBuf2 := a.Gls().GenerateRenderbuffer()
@@ -367,12 +367,14 @@ func main() {
 
 		// Compute shader pass
 		a.Gls().BindFramebuffer(fb2)
-		terrain.Textures[1].UseAsFramebuffer(a.Gls())
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
+		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
 		terrain.SetShader("compute")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
-		if err := renderer.Render(computeScene, camera.NewOrthographic(1, 0, 1, float32(terrain.Size), camera.Vertical)); err != nil {
+		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
 		}
+		a.Gls().Viewport(0, 0, int32(width), int32(height))
 
 		// Standard render pass
 		a.Gls().BindFramebuffer(0)

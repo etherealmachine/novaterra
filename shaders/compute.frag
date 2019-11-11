@@ -6,5 +6,7 @@ in vec2 FragTexcoord;
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(FragTexcoord.x, FragTexcoord.y, 0.0, 1.0);
+    float height = texture(MatTexture[0], FragTexcoord).x;
+    float waterHeight = texture(MatTexture[0], FragTexcoord).y;
+    FragColor = vec4(height/10, waterHeight, 0, 1);
 }

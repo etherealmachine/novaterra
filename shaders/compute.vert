@@ -1,9 +1,11 @@
 #include <attributes>
-#include <material>
+
+// Model uniforms
+uniform mat4 MVP;
 
 out vec2 FragTexcoord;
 
 void main() {
     FragTexcoord = VertexTexcoord;
-    gl_Position = vec4(VertexPosition, 1.0);
+    gl_Position = MVP * vec4(VertexPosition, 1.0);
 }
