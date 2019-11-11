@@ -60,9 +60,16 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 			m.heightmap = append(m.heightmap, 0)
 		}
 	}
+	nextHeightmap := make([]float32, len(m.heightmap))
+	copy(nextHeightmap, m.heightmap)
 	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
-	m.nextHeightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
+	m.nextHeightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nextHeightmap)
+	m.heightTexture.SetMagFilter(gls.NEAREST)
+	m.heightTexture.SetMinFilter(gls.NEAREST)
+	m.nextHeightTexture.SetMagFilter(gls.NEAREST)
+	m.nextHeightTexture.SetMinFilter(gls.NEAREST)
 	m.AddTexture(m.heightTexture)
+	m.AddTexture(m.nextHeightTexture)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
 		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
 		if err != nil {
@@ -196,11 +203,20 @@ func main() {
 	// Set up orbit control for the camera
 	camera.NewOrbitControl(cam)
 
-	geom := geometry.NewSegmentedPlane(128, 128, 128, 128)
 	terrain := NewTerrainMaterial(128)
+	geom := geometry.NewSegmentedPlane(float32(terrain.Size), float32(terrain.Size), terrain.Size, terrain.Size)
 	mesh := graphic.NewMesh(geom, terrain)
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
+
+	/*
+		plane := geometry.NewPlane(30, 30)
+		viewportMat := material.NewStandard(&math32.Color{R: 1.0, G: 1.0, B: 1.0})
+		viewportMat.AddTexture(terrain.nextHeightTexture)
+		viewport := graphic.NewMesh(plane, viewportMat)
+		viewport.TranslateY(30)
+		scene.Add(viewport)
+	*/
 
 	ui := gui.NewPanel(0, 50)
 	ui.SetPaddings(4, 4, 4, 4)
@@ -294,38 +310,67 @@ func main() {
 	a.Subscribe(window.OnWindowSize, onResize)
 	onResize("", nil)
 
+	computeScene := core.NewNode()
+	computeScene.Add(
+		graphic.NewMesh(
+			geometry.NewSegmentedPlane(
+				float32(terrain.Size), float32(terrain.Size), terrain.Size, terrain.Size), terrain))
+
+	fb1 := a.Gls().GenerateFramebuffer()
+	colorBuf := a.Gls().GenerateRenderbuffer()
+	depthBuf := a.Gls().GenerateRenderbuffer()
+	a.Gls().BindFramebuffer(fb1)
+	a.Gls().BindRenderbuffer(colorBuf)
+	a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
+	a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
+	a.Gls().BindRenderbuffer(depthBuf)
+	a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
+	a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf)
+
+	fb2 := a.Gls().GenerateFramebuffer()
+	depthBuf2 := a.Gls().GenerateRenderbuffer()
+	a.Gls().BindFramebuffer(fb2)
+	a.Gls().BindRenderbuffer(depthBuf2)
+	a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
+	a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf2)
+
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
 		// Update camera position
 		terrain.CameraPosition = cam.Position()
 
-		// Compute shader pass
-		m.nextHeightTexture.Render(a.Gls())
-		a.Gls().WithTexture(m.nextHeightTexture, func() {
-			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
-			if err := renderer.Render(scene, cam); err != nil {
-				panic(err)
-			}
-		})
-
 		// Color-based mouse-picking shader pass
-		a.Gls().WithFramebuffer(func() {
-			orb.SetVisible(false)
-			terrain.SetShader("color")
+		a.Gls().BindFramebuffer(fb1)
+		orb.SetVisible(false)
+		//viewport.SetVisible(false)
+		terrain.SetShader("color")
+		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(scene, cam); err != nil {
+			panic(err)
+		}
+		a.Gls().ReadBuffer(gls.COLOR_ATTACHMENT0)
+		c := a.Gls().ReadPixels(int(mouseX), int(mouseY), 1, 1)[0][0]
+		if c.R == 0.5 && c.G == 0.5 && c.B == 0.5 {
+			return
+		}
+		terrain.BrushPosition.X = c.R
+		terrain.BrushPosition.Y = c.G
+
+		/*
+			// Compute shader pass
+			a.Gls().BindFramebuffer(fb2)
+			terrain.Textures[1].UseAsFramebuffer(a.Gls())
+			terrain.SetShader("compute")
 			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
-			if err := renderer.Render(scene, cam); err != nil {
+			if err := renderer.Render(computeScene, camera.NewOrthographic(1, 0, 1, float32(terrain.Size), camera.Vertical)); err != nil {
 				panic(err)
 			}
-			c := a.Gls().ReadPixels(int(mouseX), int(mouseY), 1, 1)[0][0]
-			if c.R == 0.5 && c.G == 0.5 && c.B == 0.5 {
-				return
-			}
-			terrain.BrushPosition.X = c.R
-			terrain.BrushPosition.Y = c.G
-		})
+		*/
 
 		// Standard render pass
+		a.Gls().BindFramebuffer(0)
 		orb.SetVisible(true)
+		//viewport.SetVisible(true)
 		terrain.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
