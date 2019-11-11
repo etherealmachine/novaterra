@@ -52,16 +52,20 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.uniformBrushPosition.Init("BrushPosition")
 	m.uniformBrushSize.Init("BrushSize")
 	noise := opensimplex.NewNormalized32(0)
+	nextHeightmap := make([]float32, len(m.heightmap))
 	for y := 0; y < m.Size; y++ {
 		for x := 0; x < m.Size; x++ {
-			m.heightmap = append(m.heightmap, math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20))
+			height := math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20)
+			m.heightmap = append(m.heightmap, height)
 			m.heightmap = append(m.heightmap, 0)
 			m.heightmap = append(m.heightmap, 0)
 			m.heightmap = append(m.heightmap, 0)
+			nextHeightmap = append(nextHeightmap, height)
+			nextHeightmap = append(nextHeightmap, 0)
+			nextHeightmap = append(nextHeightmap, 0)
+			nextHeightmap = append(nextHeightmap, 0)
 		}
 	}
-	nextHeightmap := make([]float32, len(m.heightmap))
-	copy(nextHeightmap, m.heightmap)
 	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
 	m.nextHeightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nextHeightmap)
 	m.heightTexture.SetMagFilter(gls.NEAREST)
@@ -209,14 +213,12 @@ func main() {
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
 
-	/*
-		plane := geometry.NewPlane(30, 30)
-		viewportMat := material.NewStandard(&math32.Color{R: 1.0, G: 1.0, B: 1.0})
-		viewportMat.AddTexture(terrain.nextHeightTexture)
-		viewport := graphic.NewMesh(plane, viewportMat)
-		viewport.TranslateY(30)
-		scene.Add(viewport)
-	*/
+	plane := geometry.NewPlane(30, 30)
+	viewportMat := material.NewStandard(&math32.Color{R: 1.0, G: 1.0, B: 1.0})
+	viewportMat.AddTexture(terrain.nextHeightTexture)
+	viewport := graphic.NewMesh(plane, viewportMat)
+	viewport.TranslateY(30)
+	scene.Add(viewport)
 
 	ui := gui.NewPanel(0, 50)
 	ui.SetPaddings(4, 4, 4, 4)
@@ -332,8 +334,7 @@ func main() {
 	computeScene := core.NewNode()
 	computeScene.Add(
 		graphic.NewMesh(
-			geometry.NewSegmentedPlane(
-				float32(terrain.Size), float32(terrain.Size), terrain.Size, terrain.Size), terrain))
+			geometry.NewPlane(float32(terrain.Size), float32(terrain.Size)), terrain))
 
 	fb2 := a.Gls().GenerateFramebuffer()
 	depthBuf2 := a.Gls().GenerateRenderbuffer()
@@ -350,7 +351,7 @@ func main() {
 		// Color-based mouse-picking shader pass
 		a.Gls().BindFramebuffer(fb1)
 		orb.SetVisible(false)
-		//viewport.SetVisible(false)
+		viewport.SetVisible(false)
 		terrain.SetShader("color")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
@@ -364,21 +365,19 @@ func main() {
 		terrain.BrushPosition.X = c.R
 		terrain.BrushPosition.Y = c.G
 
-		/*
-			// Compute shader pass
-			a.Gls().BindFramebuffer(fb2)
-			terrain.Textures[1].UseAsFramebuffer(a.Gls())
-			terrain.SetShader("compute")
-			a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
-			if err := renderer.Render(computeScene, camera.NewOrthographic(1, 0, 1, float32(terrain.Size), camera.Vertical)); err != nil {
-				panic(err)
-			}
-		*/
+		// Compute shader pass
+		a.Gls().BindFramebuffer(fb2)
+		terrain.Textures[1].UseAsFramebuffer(a.Gls())
+		terrain.SetShader("compute")
+		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, camera.NewOrthographic(1, 0, 1, float32(terrain.Size), camera.Vertical)); err != nil {
+			panic(err)
+		}
 
 		// Standard render pass
 		a.Gls().BindFramebuffer(0)
 		orb.SetVisible(true)
-		//viewport.SetVisible(true)
+		viewport.SetVisible(true)
 		terrain.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
