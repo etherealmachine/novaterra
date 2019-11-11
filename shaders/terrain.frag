@@ -65,7 +65,7 @@ void main() {
 
 	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
 	vec3 Ambdiff, Spec;
-	phongModel(Position, FlatNormal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
+	phongModel(Position, Normal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
 
 	if (Height > 0.1 && WaterHeight <= 0) {
 		Spec = vec3(0.0);

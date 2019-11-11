@@ -295,6 +295,17 @@ func main() {
 		}
 	})
 
+	fb1 := a.Gls().GenerateFramebuffer()
+	colorBuf := a.Gls().GenerateRenderbuffer()
+	depthBuf := a.Gls().GenerateRenderbuffer()
+	a.Gls().BindFramebuffer(fb1)
+	a.Gls().BindRenderbuffer(colorBuf)
+	a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
+	a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
+	a.Gls().BindRenderbuffer(depthBuf)
+	a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
+	a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf)
+
 	// Set up callback to update viewport and camera aspect ratio when the window is resized
 	onResize := func(evname string, ev interface{}) {
 		// Get framebuffer size and update viewport accordingly
@@ -306,6 +317,14 @@ func main() {
 		// Update UI size
 		dock.SetWidth(float32(width))
 		ui.SetWidth(float32(width))
+
+		a.Gls().BindFramebuffer(fb1)
+		a.Gls().BindRenderbuffer(colorBuf)
+		a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
+		a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
+		a.Gls().BindRenderbuffer(depthBuf)
+		a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
+		a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf)
 	}
 	a.Subscribe(window.OnWindowSize, onResize)
 	onResize("", nil)
@@ -315,17 +334,6 @@ func main() {
 		graphic.NewMesh(
 			geometry.NewSegmentedPlane(
 				float32(terrain.Size), float32(terrain.Size), terrain.Size, terrain.Size), terrain))
-
-	fb1 := a.Gls().GenerateFramebuffer()
-	colorBuf := a.Gls().GenerateRenderbuffer()
-	depthBuf := a.Gls().GenerateRenderbuffer()
-	a.Gls().BindFramebuffer(fb1)
-	a.Gls().BindRenderbuffer(colorBuf)
-	a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
-	a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
-	a.Gls().BindRenderbuffer(depthBuf)
-	a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
-	a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf)
 
 	fb2 := a.Gls().GenerateFramebuffer()
 	depthBuf2 := a.Gls().GenerateRenderbuffer()
