@@ -23,13 +23,17 @@ import (
 	"github.com/g3n/engine/window"
 )
 
+// BrushType can modify the terrain in different ways.
 type BrushType int32
 
+// Brush Types
 const (
-	None  = BrushType(0)
-	Raise = BrushType(1)
-	Lower = BrushType(2)
-	Water = BrushType(3)
+	None    = BrushType(0)
+	Raise   = BrushType(1)
+	Lower   = BrushType(2)
+	Water   = BrushType(3)
+	Smooth  = BrushType(4)
+	Flatten = BrushType(5)
 )
 
 // TerrainMaterial can render and manipulate a heightmap.
@@ -147,7 +151,10 @@ func main() {
 	}
 	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
 	a.Renderer().AddProgram("color", "terrain.vert", "color.frag")
-	a.Renderer().AddProgram("compute", "compute.vert", "compute.frag")
+	a.Renderer().AddProgram("apply_brush", "compute.vert", "apply_brush.frag")
+	a.Renderer().AddProgram("compute_flow", "compute.vert", "compute_flow.frag")
+	a.Renderer().AddProgram("compute_deltav", "compute.vert", "compute_deltav.frag")
+	a.Renderer().AddProgram("update_water", "compute.vert", "update_water.frag")
 
 	scene := core.NewNode()
 
@@ -187,27 +194,30 @@ func main() {
 	layout.SetSpacing(10)
 	ui.Add(dock)
 
-	btn := gui.NewButton("Raise")
-	btn.SetSize(40, 40)
-	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = Raise
-		gui.Manager().SetKeyFocus(gui.Manager())
-	})
-	dock.Add(btn)
-	btn = gui.NewButton("Lower")
-	btn.SetSize(40, 40)
-	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = Lower
-		gui.Manager().SetKeyFocus(gui.Manager())
-	})
-	dock.Add(btn)
-	btn = gui.NewButton("Water")
-	btn.SetSize(40, 40)
-	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = Water
-		gui.Manager().SetKeyFocus(gui.Manager())
-	})
-	dock.Add(btn)
+	brushes := []struct {
+		Type BrushType
+		Name string
+	}{
+		{Raise, "Raise"},
+		{Lower, "Lower"},
+		{Water, "Water"},
+		{Smooth, "Smooth"},
+		{Flatten, "Flatten"},
+	}
+
+	onClick := func(brushType BrushType) func(string, interface{}) {
+		return func(name string, ev interface{}) {
+			terrain.BrushType = brushType
+			gui.Manager().SetKeyFocus(gui.Manager())
+		}
+	}
+
+	for _, brush := range brushes {
+		btn := gui.NewButton(brush.Name)
+		btn.SetSize(40, 40)
+		btn.Subscribe(gui.OnClick, onClick(brush.Type))
+		dock.Add(btn)
+	}
 
 	dir := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
 	dir.SetPosition(10, 50, 0)
@@ -302,11 +312,11 @@ func main() {
 		terrain.BrushPosition.X = c.R
 		terrain.BrushPosition.Y = c.G
 
-		// Compute shader pass
+		// Compute shader passes
 		a.Gls().BindFramebuffer(computeFramebuffer)
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
-		terrain.SetShader("compute")
+		terrain.SetShader("apply_brush")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
