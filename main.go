@@ -23,6 +23,15 @@ import (
 	"github.com/g3n/engine/window"
 )
 
+type BrushType int32
+
+const (
+	None  = BrushType(0)
+	Raise = BrushType(1)
+	Lower = BrushType(2)
+	Water = BrushType(3)
+)
+
 // TerrainMaterial can render and manipulate a heightmap.
 type TerrainMaterial struct {
 	material.Standard
@@ -32,12 +41,15 @@ type TerrainMaterial struct {
 	uniformCameraPosition gls.Uniform
 	uniformBrushPosition  gls.Uniform
 	uniformBrushSize      gls.Uniform
+	uniformBrushType      gls.Uniform
+	uniformMouseButton    gls.Uniform
 
 	CameraPosition math32.Vector3
 	Size           int
 	BrushPosition  math32.Vector2
 	BrushSize      float32
-	BrushType      string
+	BrushType      BrushType
+	MouseButton    int32
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
@@ -51,6 +63,8 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.uniformCameraPosition.Init("CameraPosition")
 	m.uniformBrushPosition.Init("BrushPosition")
 	m.uniformBrushSize.Init("BrushSize")
+	m.uniformBrushType.Init("BrushType")
+	m.uniformMouseButton.Init("MouseButton")
 	noise := opensimplex.NewNormalized32(0)
 	nextHeightmap := make([]float32, len(m.heightmap))
 	for y := 0; y < m.Size; y++ {
@@ -87,61 +101,6 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	return m
 }
 
-// Raise the area under the brush.
-func (m *TerrainMaterial) Raise() {
-	radius := int(m.BrushSize * float32(m.Size))
-	bx := int(m.BrushPosition.X * float32(m.Size))
-	by := int(m.BrushPosition.Y * float32(m.Size))
-	for x := -radius; x <= radius; x++ {
-		for y := -radius; y <= radius; y++ {
-			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
-				i := (by+y)*m.Size*4 + (bx+x)*4
-				if i >= 0 && i < len(m.heightmap) {
-					m.heightmap[i] += 0.1
-				}
-			}
-		}
-	}
-	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
-}
-
-// Lower the area under the brush.
-func (m *TerrainMaterial) Lower() {
-	radius := int(m.BrushSize * float32(m.Size))
-	bx := int(m.BrushPosition.X * float32(m.Size))
-	by := int(m.BrushPosition.Y * float32(m.Size))
-	for x := -radius; x <= radius; x++ {
-		for y := -radius; y <= radius; y++ {
-			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
-				i := (by+y)*m.Size*4 + (bx+x)*4
-				if i >= 0 && i < len(m.heightmap) {
-					m.heightmap[i] -= 0.1
-					m.heightmap[i] = math32.Max(0, m.heightmap[i])
-				}
-			}
-		}
-	}
-	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
-}
-
-// Water the area under the brush.
-func (m *TerrainMaterial) Water() {
-	radius := int(m.BrushSize * float32(m.Size))
-	bx := int(m.BrushPosition.X * float32(m.Size))
-	by := int(m.BrushPosition.Y * float32(m.Size))
-	for x := -radius; x <= radius; x++ {
-		for y := -radius; y <= radius; y++ {
-			if math32.Sqrt(float32(x*x+y*y)) < float32(radius) {
-				i := (by+y)*m.Size*4 + (bx+x)*4 + 1
-				if i >= 0 && i < len(m.heightmap) {
-					m.heightmap[i] += 0.1
-				}
-			}
-		}
-	}
-	m.heightTexture.SetData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
-}
-
 // RenderSetup is called before rendering a mesh with the material.
 // It updates shader uniform variables with their Go values.
 func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
@@ -149,6 +108,8 @@ func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 	gl.Uniform3f(m.uniformCameraPosition.Location(gl), m.CameraPosition.X, m.CameraPosition.Y, m.CameraPosition.Z)
 	gl.Uniform2f(m.uniformBrushPosition.Location(gl), m.BrushPosition.X, m.BrushPosition.Y)
 	gl.Uniform1f(m.uniformBrushSize.Location(gl), m.BrushSize)
+	gl.Uniform1i(m.uniformBrushType.Location(gl), int32(m.BrushType))
+	gl.Uniform1i(m.uniformMouseButton.Location(gl), m.MouseButton)
 }
 
 func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
@@ -213,13 +174,6 @@ func main() {
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
 
-	plane := geometry.NewPlane(30, 30)
-	viewportMat := material.NewStandard(&math32.Color{R: 1.0, G: 1.0, B: 1.0})
-	viewportMat.AddTexture(terrain.nextHeightTexture)
-	viewport := graphic.NewMesh(plane, viewportMat)
-	viewport.TranslateY(30)
-	scene.Add(viewport)
-
 	ui := gui.NewPanel(0, 50)
 	ui.SetPaddings(4, 4, 4, 4)
 	ui.SetLayout(gui.NewDockLayout())
@@ -236,36 +190,28 @@ func main() {
 	btn := gui.NewButton("Raise")
 	btn.SetSize(40, 40)
 	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = "Raise"
+		terrain.BrushType = Raise
 		gui.Manager().SetKeyFocus(gui.Manager())
 	})
 	dock.Add(btn)
 	btn = gui.NewButton("Lower")
 	btn.SetSize(40, 40)
 	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = "Lower"
+		terrain.BrushType = Lower
 		gui.Manager().SetKeyFocus(gui.Manager())
 	})
 	dock.Add(btn)
 	btn = gui.NewButton("Water")
 	btn.SetSize(40, 40)
 	btn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
-		terrain.BrushType = "Water"
+		terrain.BrushType = Water
 		gui.Manager().SetKeyFocus(gui.Manager())
 	})
 	dock.Add(btn)
 
-	yellow := math32.ColorName("yellow")
-	orb := graphic.NewMesh(
-		geometry.NewSphere(1, 100, 100),
-		material.NewStandard(&yellow),
-	)
-	scene.Add(orb)
-
 	dir := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
 	dir.SetPosition(10, 50, 0)
 	dir.SetDirection(0, -1, 0)
-	orb.SetPosition(10, 50, 0)
 	scene.Add(dir)
 	scene.Add(light.NewAmbient(&math32.Color{R: 1, G: 1, B: 1}, 0.8))
 
@@ -280,11 +226,10 @@ func main() {
 		mouseY = e.Ypos * float32(scaleY)
 	})
 
-	var mouseDown bool
 	a.SubscribeID(window.OnMouseDown, a, func(evname string, ev interface{}) {
 		e := ev.(*window.MouseEvent)
 		if e.Button == window.MouseButton1 {
-			mouseDown = true
+			terrain.MouseButton = 1
 			gui.Manager().SetCursorFocus(gui.Manager())
 		}
 	})
@@ -292,15 +237,15 @@ func main() {
 	a.SubscribeID(window.OnMouseUp, a, func(evname string, ev interface{}) {
 		e := ev.(*window.MouseEvent)
 		if e.Button == window.MouseButton1 {
-			mouseDown = false
+			terrain.MouseButton = 0
 			gui.Manager().SetCursorFocus(nil)
 		}
 	})
 
-	fb1 := a.Gls().GenerateFramebuffer()
+	mousePickFramebuffer := a.Gls().GenerateFramebuffer()
 	colorBuf := a.Gls().GenerateRenderbuffer()
 	depthBuf := a.Gls().GenerateRenderbuffer()
-	a.Gls().BindFramebuffer(fb1)
+	a.Gls().BindFramebuffer(mousePickFramebuffer)
 	a.Gls().BindRenderbuffer(colorBuf)
 	a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
 	a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
@@ -320,7 +265,7 @@ func main() {
 		dock.SetWidth(float32(width))
 		ui.SetWidth(float32(width))
 
-		a.Gls().BindFramebuffer(fb1)
+		a.Gls().BindFramebuffer(mousePickFramebuffer)
 		a.Gls().BindRenderbuffer(colorBuf)
 		a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
 		a.Gls().FramebufferRenderbuffer(gls.COLOR_ATTACHMENT0, colorBuf)
@@ -331,17 +276,11 @@ func main() {
 	a.Subscribe(window.OnWindowSize, onResize)
 	onResize("", nil)
 
+	computeFramebuffer := a.Gls().GenerateFramebuffer()
 	computeScene := core.NewNode()
 	computeCam := camera.NewOrthographic(1.0, 0, 1.0, 2.0, camera.Vertical)
 	computeScene.Add(graphic.NewMesh(geometry.NewPlane(2, 2), terrain))
 	computeScene.Add(computeCam)
-
-	fb2 := a.Gls().GenerateFramebuffer()
-	depthBuf2 := a.Gls().GenerateRenderbuffer()
-	a.Gls().BindFramebuffer(fb2)
-	a.Gls().BindRenderbuffer(depthBuf2)
-	a.Gls().RenderbufferStorage(gls.DEPTH_COMPONENT16, width, height)
-	a.Gls().FramebufferRenderbuffer(gls.DEPTH_ATTACHMENT, depthBuf2)
 
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
@@ -349,9 +288,7 @@ func main() {
 		terrain.CameraPosition = cam.Position()
 
 		// Color-based mouse-picking shader pass
-		a.Gls().BindFramebuffer(fb1)
-		orb.SetVisible(false)
-		viewport.SetVisible(false)
+		a.Gls().BindFramebuffer(mousePickFramebuffer)
 		terrain.SetShader("color")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
@@ -366,7 +303,7 @@ func main() {
 		terrain.BrushPosition.Y = c.G
 
 		// Compute shader pass
-		a.Gls().BindFramebuffer(fb2)
+		a.Gls().BindFramebuffer(computeFramebuffer)
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
 		terrain.SetShader("compute")
@@ -374,28 +311,15 @@ func main() {
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
 		}
+		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
 		a.Gls().Viewport(0, 0, int32(width), int32(height))
 
 		// Standard render pass
 		a.Gls().BindFramebuffer(0)
-		orb.SetVisible(true)
-		viewport.SetVisible(true)
 		terrain.SetShader("terrain")
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
-		}
-
-		// User interaction
-		if mouseDown {
-			switch terrain.BrushType {
-			case "Raise":
-				terrain.Raise()
-			case "Lower":
-				terrain.Lower()
-			case "Water":
-				terrain.Water()
-			}
 		}
 	})
 }
