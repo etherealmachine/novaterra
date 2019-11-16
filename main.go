@@ -294,6 +294,7 @@ func main() {
 
 	// Run the application
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		width, height := a.GetFramebufferSize()
 		// Update camera position
 		terrain.CameraPosition = cam.Position()
 
