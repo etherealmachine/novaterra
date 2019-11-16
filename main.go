@@ -39,9 +39,6 @@ const (
 // TerrainMaterial can render and manipulate a heightmap.
 type TerrainMaterial struct {
 	material.Standard
-	heightTexture         *texture.Texture2D
-	nextHeightTexture     *texture.Texture2D
-	heightmap             []float32
 	uniformCameraPosition gls.Uniform
 	uniformBrushPosition  gls.Uniform
 	uniformBrushSize      gls.Uniform
@@ -70,28 +67,26 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.uniformBrushType.Init("BrushType")
 	m.uniformMouseButton.Init("MouseButton")
 	noise := opensimplex.NewNormalized32(0)
-	nextHeightmap := make([]float32, len(m.heightmap))
+	var heightmap []float32
 	for y := 0; y < m.Size; y++ {
 		for x := 0; x < m.Size; x++ {
 			height := math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20)
-			m.heightmap = append(m.heightmap, height)
-			m.heightmap = append(m.heightmap, 0)
-			m.heightmap = append(m.heightmap, 0)
-			m.heightmap = append(m.heightmap, 0)
-			nextHeightmap = append(nextHeightmap, height)
-			nextHeightmap = append(nextHeightmap, 0)
-			nextHeightmap = append(nextHeightmap, 0)
-			nextHeightmap = append(nextHeightmap, 0)
+			heightmap = append(heightmap, height)
+			heightmap = append(heightmap, 0)
+			heightmap = append(heightmap, 0)
+			heightmap = append(heightmap, 0)
 		}
 	}
-	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
-	m.nextHeightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nextHeightmap)
-	m.heightTexture.SetMagFilter(gls.NEAREST)
-	m.heightTexture.SetMinFilter(gls.NEAREST)
-	m.nextHeightTexture.SetMagFilter(gls.NEAREST)
-	m.nextHeightTexture.SetMinFilter(gls.NEAREST)
-	m.AddTexture(m.heightTexture)
-	m.AddTexture(m.nextHeightTexture)
+	heightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
+	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
+	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
+	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
+	heightTexture.SetMagFilter(gls.NEAREST)
+	heightTexture.SetMinFilter(gls.NEAREST)
+	nextHeightTexture.SetMagFilter(gls.NEAREST)
+	nextHeightTexture.SetMinFilter(gls.NEAREST)
+	m.AddTexture(heightTexture)
+	m.AddTexture(nextHeightTexture)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
 		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
 		if err != nil {
@@ -102,6 +97,8 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 		tex.SetWrapT(gls.REPEAT)
 		m.AddTexture(tex)
 	}
+	m.AddTexture(flowTexture)
+	m.AddTexture(nextFlowTexture)
 	return m
 }
 
@@ -314,16 +311,18 @@ func main() {
 		terrain.BrushPosition.Y = c.G
 
 		// Compute shader passes
+		a.Gls().Enable(gls.COLOR_LOGIC_OP)
 		a.Gls().BindFramebuffer(computeFramebuffer)
-		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		terrain.SetShader("apply_brush")
 		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
-		a.Gls().Enable(gls.COLOR_LOGIC_OP)
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
 		}
 		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
+
 		a.Gls().Viewport(0, 0, int32(width), int32(height))
 		a.Gls().Disable(gls.COLOR_LOGIC_OP)
 
