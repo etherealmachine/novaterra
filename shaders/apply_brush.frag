@@ -37,5 +37,5 @@ void main() {
                 break;
         }
     }
-    FragColor = vec4(height, waterHeight, 0, 1.0);
+    FragColor = vec4(height, waterHeight, 0, 0);
 }

@@ -317,12 +317,14 @@ func main() {
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
 		terrain.SetShader("apply_brush")
-		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		a.Gls().Enable(gls.COLOR_LOGIC_OP)
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
 		}
 		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
 		a.Gls().Viewport(0, 0, int32(width), int32(height))
+		a.Gls().Disable(gls.COLOR_LOGIC_OP)
 
 		// Standard render pass
 		a.Gls().BindFramebuffer(0)
