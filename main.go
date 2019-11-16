@@ -150,8 +150,7 @@ func main() {
 	a.Renderer().AddProgram("color", "terrain.vert", "color.frag")
 	a.Renderer().AddProgram("apply_brush", "compute.vert", "apply_brush.frag")
 	a.Renderer().AddProgram("compute_flow", "compute.vert", "compute_flow.frag")
-	a.Renderer().AddProgram("compute_deltav", "compute.vert", "compute_deltav.frag")
-	a.Renderer().AddProgram("update_water", "compute.vert", "update_water.frag")
+	a.Renderer().AddProgram("apply_flow", "compute.vert", "apply_flow.frag")
 
 	scene := core.NewNode()
 
@@ -317,6 +316,22 @@ func main() {
 
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		terrain.SetShader("apply_brush")
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, computeCam); err != nil {
+			panic(err)
+		}
+		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[9].TexName())
+		terrain.SetShader("compute_flow")
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, computeCam); err != nil {
+			panic(err)
+		}
+		terrain.Textures[8], terrain.Textures[9] = terrain.Textures[9], terrain.Textures[8]
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
+		terrain.SetShader("apply_flow")
 		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
