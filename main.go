@@ -78,9 +78,9 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 		}
 	}
 	heightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
-	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
-	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
-	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, nil)
+	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
+	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
+	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
 	heightTexture.SetMagFilter(gls.NEAREST)
 	heightTexture.SetMinFilter(gls.NEAREST)
 	nextHeightTexture.SetMagFilter(gls.NEAREST)

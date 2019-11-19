@@ -18,12 +18,9 @@ void main() {
         texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y+e)).z
     );
 
-    if (FragTexcoord.x < e) flowIn.x = 0;
-    if (FragTexcoord.x > 1-e) flowIn.y = 0;
-    if (FragTexcoord.y < e) flowIn.z = 0;
-    if (FragTexcoord.y > 1-e) flowIn.w = 0;
-
     float deltaV = dot(flowIn, vec4(1)) - dot(flowOut, vec4(1));
-    float newWaterHeight = waterHeight + 0.9*deltaV;
+    float newWaterHeight = waterHeight + 0.5*deltaV;
+    if (newWaterHeight < 0.01) newWaterHeight = 0;
+    if (FragTexcoord.x <= e || FragTexcoord.x >= 1-e || FragTexcoord.y <= e || FragTexcoord.y >= 1-e) newWaterHeight = 0;
     FragColor = vec4(height, newWaterHeight, 0, 0);
 }
