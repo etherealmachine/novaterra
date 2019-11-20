@@ -29,11 +29,6 @@ void main() {
         max(0, h + w - hD - wD)
     );
 
-    if (FragTexcoord.x < e) flow.y = 0;
-    if (FragTexcoord.x > 1-e) flow.x = 0;
-    if (FragTexcoord.y < e) flow.w = 0;
-    if (FragTexcoord.y > 1-e) flow.z = 0;
-
     flow *= min(1, w/dot(flow, vec4(1)));
 
     FragColor = flow;

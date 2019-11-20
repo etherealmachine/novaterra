@@ -6,6 +6,7 @@ precision highp float;
 
 uniform vec2 BrushPosition;
 uniform float BrushSize;
+uniform bool FlatNormal;
 
 in vec4 Position;
 in vec3 Normal;
@@ -61,11 +62,25 @@ void main() {
 		diffuse *= 1.2;
 	}
 
-	vec3 FlatNormal = normalize(cross(dFdx(Position).xyz, dFdy(Position).xyz));
+	vec3 normal = Normal;
+	if (FlatNormal) normal = normalize(cross(dFdx(Position).xyz, dFdy(Position).xyz));
+
+  float e = 1.0/128.0;
+	vec4 flowOut = texture(MatTexture[8], FragTexcoord);
+	vec4 flowIn = vec4(
+			texture(MatTexture[8], vec2(FragTexcoord.x-e, FragTexcoord.y)).y,
+			texture(MatTexture[8], vec2(FragTexcoord.x+e, FragTexcoord.y)).x,
+			texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y-e)).w,
+			texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y+e)).z
+	);
+  float deltaV = dot(flowIn, vec4(1)) - dot(flowOut, vec4(1));
+	if (deltaV > 0) {
+		diffuse.r = deltaV / WaterHeight;
+	}
 
 	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
 	vec3 Ambdiff, Spec;
-	phongModel(Position, Normal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
+	phongModel(Position, normal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
 
 	if (Height > 0.1 && WaterHeight <= 0) {
 		Spec = vec3(0.0);

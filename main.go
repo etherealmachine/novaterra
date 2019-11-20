@@ -44,6 +44,8 @@ type TerrainMaterial struct {
 	uniformBrushSize      gls.Uniform
 	uniformBrushType      gls.Uniform
 	uniformMouseButton    gls.Uniform
+	uniformFlatNormal     gls.Uniform
+	uniformOverlay        gls.Uniform
 
 	CameraPosition math32.Vector3
 	Size           int
@@ -51,6 +53,8 @@ type TerrainMaterial struct {
 	BrushSize      float32
 	BrushType      BrushType
 	MouseButton    int32
+	FlatNormal     bool
+	Overlay        int32
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
@@ -66,6 +70,8 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.uniformBrushSize.Init("BrushSize")
 	m.uniformBrushType.Init("BrushType")
 	m.uniformMouseButton.Init("MouseButton")
+	m.uniformFlatNormal.Init("FlatNormal")
+	m.uniformOverlay.Init("Overlay")
 	noise := opensimplex.NewNormalized32(0)
 	var heightmap []float32
 	for y := 0; y < m.Size; y++ {
@@ -111,6 +117,12 @@ func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 	gl.Uniform1f(m.uniformBrushSize.Location(gl), m.BrushSize)
 	gl.Uniform1i(m.uniformBrushType.Location(gl), int32(m.BrushType))
 	gl.Uniform1i(m.uniformMouseButton.Location(gl), m.MouseButton)
+	if m.FlatNormal {
+		gl.Uniform1i(m.uniformFlatNormal.Location(gl), 1)
+	} else {
+		gl.Uniform1i(m.uniformFlatNormal.Location(gl), 0)
+	}
+	gl.Uniform1i(m.uniformOverlay.Location(gl), m.Overlay)
 }
 
 func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
