@@ -22,5 +22,9 @@ void main() {
   float newWaterHeight = waterHeight + 0.5*deltaV;
   if (newWaterHeight < 0.01) newWaterHeight = 0;
   if (FragTexcoord.x <= e || FragTexcoord.x >= 1-e || FragTexcoord.y <= e || FragTexcoord.y >= 1-e) newWaterHeight = 0;
-  FragColor = vec4(height, newWaterHeight, 0, 0);
+  float vx = (flowIn.x - flowOut.x + flowOut.y - flowIn.y) / 2;
+  vx /= (waterHeight + newWaterHeight) / 2;
+  float vy = (flowIn.z - flowOut.z + flowOut.w - flowIn.w) / 2;
+  vy /= (waterHeight + newWaterHeight) / 2;
+  FragColor = vec4(height, newWaterHeight, vx, vy);
 }

@@ -15,6 +15,7 @@ in vec3 CamDir;
 in vec2 FragTexcoord;
 in float Height;
 in float WaterHeight;
+in vec2 Velocity;
 
 out vec4 FragColor;
 void main() {

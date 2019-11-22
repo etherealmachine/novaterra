@@ -14,6 +14,7 @@ out vec3 CamDir;
 out vec2 FragTexcoord;
 out float Height;
 out float WaterHeight;
+out vec2 Velocity;
 
 float height(vec2 pos) {
 	Height = texture(MatTexture[0], pos).x;
@@ -34,6 +35,7 @@ void main() {
 	FragTexcoord = VertexTexcoord;
 	Height = texture(MatTexture[0], VertexTexcoord).x;
 	WaterHeight = texture(MatTexture[0], VertexTexcoord).y;
+	Velocity = texture(MatTexture[0], VertexTexcoord).zw;
 	vec3 pos = VertexPosition;
 	pos.z += Height + WaterHeight;
 	Position = ModelViewMatrix * vec4(pos, 1.0);
