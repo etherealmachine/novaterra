@@ -11,5 +11,7 @@ void main() {
   float height = texture(MatTexture[0], FragTexcoord).x;
   float waterHeight = texture(MatTexture[0], FragTexcoord).y;
   vec2 velocity = texture(MatTexture[0], FragTexcoord).zw;
+  float erosion = texture(MatTexture[10], FragTexcoord).z;
+  float deposition = texture(MatTexture[10], FragTexcoord).w;
   FragColor = vec4(height, waterHeight, velocity.x, velocity.y);
 }

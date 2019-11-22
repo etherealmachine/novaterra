@@ -182,6 +182,7 @@ func main() {
 	a.Renderer().AddProgram("apply_flow", "compute.vert", "apply_flow.frag")
 	a.Renderer().AddProgram("compute_sediment", "compute.vert", "compute_sediment.frag")
 	a.Renderer().AddProgram("apply_sediment", "compute.vert", "apply_sediment.frag")
+	a.Renderer().AddProgram("transfer_sediment", "compute.vert", "transfer_sediment.frag")
 
 	scene := core.NewNode()
 
@@ -261,6 +262,20 @@ func main() {
 
 	// Set background color to gray
 	a.Gls().ClearColor(0.5, 0.5, 0.5, 1.0)
+
+	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
+		e := ev.(*window.KeyEvent)
+		switch e.Key {
+		case window.Key0:
+			terrain.Overlay = 0
+		case window.Key1:
+			terrain.Overlay = 1
+		case window.Key2:
+			terrain.Overlay = 2
+		case window.Key3:
+			terrain.Overlay = 3
+		}
+	})
 
 	var mouseX, mouseY float32
 	a.SubscribeID(window.OnCursor, a, func(evname string, ev interface{}) {
@@ -391,6 +406,14 @@ func main() {
 			panic(err)
 		}
 		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
+		terrain.SetShader("transfer_sediment")
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, computeCam); err != nil {
+			panic(err)
+		}
+		terrain.Textures[10], terrain.Textures[11] = terrain.Textures[11], terrain.Textures[10]
 
 		a.Gls().Viewport(0, 0, int32(width), int32(height))
 		a.Gls().Disable(gls.COLOR_LOGIC_OP)

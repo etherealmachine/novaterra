@@ -15,7 +15,6 @@ in vec3 CamDir;
 in vec2 FragTexcoord;
 in float Height;
 in float WaterHeight;
-in vec2 Velocity;
 
 out vec4 FragColor;
 void main() {
@@ -67,6 +66,12 @@ void main() {
 	vec3 normal = Normal;
 	if (FlatNormal) normal = normalize(cross(dFdx(Position).xyz, dFdy(Position).xyz));
 
+	vec2 velocity = texture(MatTexture[0], FragTexcoord).zw;
+	float sediment = texture(MatTexture[10], FragTexcoord).x;
+	float capacity = texture(MatTexture[10], FragTexcoord).y;
+	float erosion  = texture(MatTexture[10], FragTexcoord).z;
+	float deposition = texture(MatTexture[10], FragTexcoord).w;
+
   float e = 1.0/128.0;
 	vec4 flowOut = texture(MatTexture[8], FragTexcoord);
 	vec4 flowIn = vec4(
@@ -78,6 +83,15 @@ void main() {
   float deltaV = dot(flowIn, vec4(1)) - dot(flowOut, vec4(1));
 	if (Overlay == 1 && deltaV > 0) {
 		diffuse.r = deltaV / WaterHeight;
+	} else if (Overlay == 2 && WaterHeight > 0) {
+		if (sediment > capacity) {
+			diffuse.r *= 1.2;
+		} else {
+			diffuse.b *= 1.2;
+		}
+	} else if (Overlay == 3 && WaterHeight > 0) {
+		diffuse.r = erosion;
+		diffuse.b = deposition;
 	}
 
 	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
