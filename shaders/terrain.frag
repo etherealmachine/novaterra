@@ -7,6 +7,7 @@ precision highp float;
 uniform vec2 BrushPosition;
 uniform float BrushSize;
 uniform bool FlatNormal;
+uniform int Overlay;
 
 in vec4 Position;
 in vec3 Normal;
@@ -68,13 +69,13 @@ void main() {
   float e = 1.0/128.0;
 	vec4 flowOut = texture(MatTexture[8], FragTexcoord);
 	vec4 flowIn = vec4(
-			texture(MatTexture[8], vec2(FragTexcoord.x-e, FragTexcoord.y)).y,
-			texture(MatTexture[8], vec2(FragTexcoord.x+e, FragTexcoord.y)).x,
-			texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y-e)).w,
-			texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y+e)).z
+		texture(MatTexture[8], vec2(FragTexcoord.x-e, FragTexcoord.y)).y,
+		texture(MatTexture[8], vec2(FragTexcoord.x+e, FragTexcoord.y)).x,
+		texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y-e)).w,
+		texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y+e)).z
 	);
   float deltaV = dot(flowIn, vec4(1)) - dot(flowOut, vec4(1));
-	if (deltaV > 0) {
+	if (Overlay == 1 && deltaV > 0) {
 		diffuse.r = deltaV / WaterHeight;
 	}
 

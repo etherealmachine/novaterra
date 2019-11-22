@@ -46,6 +46,7 @@ type TerrainMaterial struct {
 	uniformMouseButton    gls.Uniform
 	uniformFlatNormal     gls.Uniform
 	uniformOverlay        gls.Uniform
+	uniformEnableErosion  gls.Uniform
 
 	CameraPosition math32.Vector3
 	Size           int
@@ -55,6 +56,7 @@ type TerrainMaterial struct {
 	MouseButton    int32
 	FlatNormal     bool
 	Overlay        int32
+	EnableErosion  bool
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
@@ -72,8 +74,10 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.uniformMouseButton.Init("MouseButton")
 	m.uniformFlatNormal.Init("FlatNormal")
 	m.uniformOverlay.Init("Overlay")
+	m.uniformEnableErosion.Init("EnableErosion")
 	noise := opensimplex.NewNormalized32(0)
 	var heightmap []float32
+	var zeros []float32
 	for y := 0; y < m.Size; y++ {
 		for x := 0; x < m.Size; x++ {
 			height := math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20)
@@ -81,12 +85,18 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 			heightmap = append(heightmap, 0)
 			heightmap = append(heightmap, 0)
 			heightmap = append(heightmap, 0)
+			zeros = append(zeros, 0)
+			zeros = append(zeros, 0)
+			zeros = append(zeros, 0)
+			zeros = append(zeros, 0)
 		}
 	}
 	heightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
-	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
-	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
-	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
+	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	sedimentTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	nextSedimentTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
 	heightTexture.SetMagFilter(gls.NEAREST)
 	heightTexture.SetMinFilter(gls.NEAREST)
 	nextHeightTexture.SetMagFilter(gls.NEAREST)
@@ -105,6 +115,8 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	}
 	m.AddTexture(flowTexture)
 	m.AddTexture(nextFlowTexture)
+	m.AddTexture(sedimentTexture)
+	m.AddTexture(nextSedimentTexture)
 	return m
 }
 
@@ -121,6 +133,11 @@ func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 		gl.Uniform1i(m.uniformFlatNormal.Location(gl), 1)
 	} else {
 		gl.Uniform1i(m.uniformFlatNormal.Location(gl), 0)
+	}
+	if m.EnableErosion {
+		gl.Uniform1i(m.uniformEnableErosion.Location(gl), 1)
+	} else {
+		gl.Uniform1i(m.uniformEnableErosion.Location(gl), 0)
 	}
 	gl.Uniform1i(m.uniformOverlay.Location(gl), m.Overlay)
 }
@@ -163,6 +180,8 @@ func main() {
 	a.Renderer().AddProgram("apply_brush", "compute.vert", "apply_brush.frag")
 	a.Renderer().AddProgram("compute_flow", "compute.vert", "compute_flow.frag")
 	a.Renderer().AddProgram("apply_flow", "compute.vert", "apply_flow.frag")
+	a.Renderer().AddProgram("compute_sediment", "compute.vert", "compute_sediment.frag")
+	a.Renderer().AddProgram("apply_sediment", "compute.vert", "apply_sediment.frag")
 
 	scene := core.NewNode()
 
@@ -226,6 +245,13 @@ func main() {
 		btn.Subscribe(gui.OnClick, onClick(brush.Type))
 		dock.Add(btn)
 	}
+
+	erodeBtn := gui.NewCheckBox("Erode")
+	erodeBtn.SetSize(80, 40)
+	erodeBtn.Subscribe(gui.OnClick, func(name string, ev interface{}) {
+		terrain.EnableErosion = erodeBtn.Value()
+	})
+	dock.Add(erodeBtn)
 
 	dir := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.9)
 	dir.SetPosition(10, 50, 0)
@@ -344,6 +370,22 @@ func main() {
 
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		terrain.SetShader("apply_flow")
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, computeCam); err != nil {
+			panic(err)
+		}
+		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[11].TexName())
+		terrain.SetShader("compute_sediment")
+		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
+		if err := renderer.Render(computeScene, computeCam); err != nil {
+			panic(err)
+		}
+		terrain.Textures[10], terrain.Textures[11] = terrain.Textures[11], terrain.Textures[10]
+
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
+		terrain.SetShader("apply_sediment")
 		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(computeScene, computeCam); err != nil {
 			panic(err)
