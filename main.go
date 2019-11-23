@@ -407,7 +407,7 @@ func main() {
 		}
 		terrain.Textures[0], terrain.Textures[1] = terrain.Textures[1], terrain.Textures[0]
 
-		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
+		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[11].TexName())
 		terrain.SetShader("transfer_sediment")
 		a.Gls().Clear(gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(computeScene, computeCam); err != nil {

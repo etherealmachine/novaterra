@@ -38,5 +38,5 @@ void main() {
       }
   }
   vec2 velocity = texture(MatTexture[0], FragTexcoord).zw;
-  FragColor = vec4(height, waterHeight, velocity.x, velocity.y);
+  FragColor = vec4(max(0, height), waterHeight, velocity.x, velocity.y);
 }

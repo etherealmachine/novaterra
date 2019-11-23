@@ -84,14 +84,10 @@ void main() {
 	if (Overlay == 1 && deltaV > 0) {
 		diffuse.r = deltaV / WaterHeight;
 	} else if (Overlay == 2 && WaterHeight > 0) {
-		if (sediment > capacity) {
-			diffuse.r *= 1.2;
-		} else {
-			diffuse.b *= 1.2;
-		}
-	} else if (Overlay == 3 && WaterHeight > 0) {
 		diffuse.r = erosion;
-		diffuse.b = deposition;
+		diffuse.g = deposition;
+	} else if (Overlay == 3 && WaterHeight > 0) {
+		diffuse.r = length(velocity);
 	}
 
 	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
