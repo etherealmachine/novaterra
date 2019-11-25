@@ -86,6 +86,7 @@ void main() {
 	} else if (Overlay == 2 && WaterHeight > 0) {
 		diffuse.r = erosion;
 		diffuse.g = deposition;
+		diffuse.b = 0;
 	} else if (Overlay == 3 && WaterHeight > 0) {
 		diffuse.r = length(velocity);
 	}

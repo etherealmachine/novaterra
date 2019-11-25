@@ -16,6 +16,7 @@ void main() {
   float gy = (hU - hD) / 2;
   float sinTheta = sqrt(gx*gx + gy*gy) / sqrt(1 + gx*gx + gy*gy);
   float capacity = sinTheta * length(velocity);
+  if (isinf(capacity) || isnan(capacity)) capacity = 0;
   float sediment = texture(MatTexture[10], FragTexcoord).x;
   float erosion = 0;
   float deposition = 0;
@@ -24,5 +25,7 @@ void main() {
   } else if (sediment > capacity) {
     deposition = sediment - capacity;
   }
+  erosion *= 0.001;
+  deposition *= 0.001;
   FragColor = vec4(sediment + erosion - deposition, capacity, erosion, deposition);
 }
