@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/ojrac/opensimplex-go"
@@ -62,7 +62,7 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	m.heightTexture = texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, m.heightmap)
 	m.AddTexture(m.heightTexture)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
-		tex, err := texture.NewTexture2DFromImage(fmt.Sprintf("textures/%s.jpg", f))
+		tex, err := texture.NewTexture2DFromImage(filepath.Join("textures", f) + ".jpg")
 		if err != nil {
 			panic(err)
 		}
@@ -165,7 +165,7 @@ func main() {
 	}
 
 	for _, f := range files {
-		b, err := ioutil.ReadFile(fmt.Sprintf("shaders/%s", f.Name()))
+		b, err := ioutil.ReadFile(filepath.Join("shaders", f.Name()))
 		if err != nil {
 			panic(err)
 		}

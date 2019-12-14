@@ -36,7 +36,7 @@ void main() {
 	WaterHeight = texture(MatTexture[0], VertexTexcoord).y;
 	vec3 pos = VertexPosition;
 	pos.z += Height + WaterHeight;
-	CamDir = normalize(-MVP*vec4(CameraPosition, 1.0)).xyz;
+	CamDir = normalize(-VertexPosition);
 	gl_Position = MVP * vec4(pos, 1.0);
 	Position = gl_Position;
 }
