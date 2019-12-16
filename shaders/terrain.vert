@@ -1,6 +1,8 @@
 #include <attributes>
 #include <material>
 
+uniform float Resolution;
+
 // Built-in Model uniforms
 uniform mat4 ModelViewMatrix;
 uniform mat3 NormalMatrix;
@@ -22,10 +24,10 @@ float height(vec2 pos) {
 }
 
 void main() {
-  float hL = height(vec2(VertexTexcoord.x - 1.0/128.0, VertexTexcoord.y));
-  float hR = height(vec2(VertexTexcoord.x + 1.0/128.0, VertexTexcoord.y));
-  float hU = height(vec2(VertexTexcoord.x, VertexTexcoord.y - 1.0/128.0));
-  float hD = height(vec2(VertexTexcoord.x, VertexTexcoord.y + 1.0/128.0));
+  float hL = height(vec2(VertexTexcoord.x - 1.0/Resolution, VertexTexcoord.y));
+  float hR = height(vec2(VertexTexcoord.x + 1.0/Resolution, VertexTexcoord.y));
+  float hU = height(vec2(VertexTexcoord.x, VertexTexcoord.y - 1.0/Resolution));
+  float hD = height(vec2(VertexTexcoord.x, VertexTexcoord.y + 1.0/Resolution));
   Normal.x = hL - hR;
   Normal.y = hD - hU;
   Normal.z = 2.0;

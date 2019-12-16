@@ -1,6 +1,7 @@
 #include <material>
 precision highp float;
 
+uniform float Resolution;
 uniform vec2 BrushPosition;
 uniform float BrushSize;
 uniform int BrushType;
@@ -12,7 +13,7 @@ layout(location = 0) out vec4 FragColor;
 
 void main() {
   float height = texture(MatTexture[0], FragTexcoord).x;
-  float e = 1.0/128.0;
+  float e = 1.0/Resolution;
   float hL = texture(MatTexture[0], vec2(FragTexcoord.x-e, FragTexcoord.y)).x;
   float hR = texture(MatTexture[0], vec2(FragTexcoord.x+e, FragTexcoord.y)).x;
   float hU = texture(MatTexture[0], vec2(FragTexcoord.x, FragTexcoord.y-e)).x;

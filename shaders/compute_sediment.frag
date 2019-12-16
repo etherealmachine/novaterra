@@ -1,13 +1,15 @@
 #include <material>
 precision highp float;
 
+uniform float Resolution;
+
 in vec2 FragTexcoord;
 
 layout(location = 0) out vec4 FragColor;
 
 void main() {
   vec2 velocity = texture(MatTexture[0], FragTexcoord).zw;
-  float e = 1.0/128.0;
+  float e = 1.0/Resolution;
   float hL = texture(MatTexture[0], vec2(FragTexcoord.x-e, FragTexcoord.y)).x;
   float hR = texture(MatTexture[0], vec2(FragTexcoord.x+e, FragTexcoord.y)).x;
   float hU = texture(MatTexture[0], vec2(FragTexcoord.x, FragTexcoord.y-e)).x;

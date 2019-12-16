@@ -39,6 +39,7 @@ const (
 // TerrainMaterial can render and manipulate a heightmap.
 type TerrainMaterial struct {
 	material.Standard
+	uniformResolution     gls.Uniform
 	uniformCameraPosition gls.Uniform
 	uniformBrushPosition  gls.Uniform
 	uniformBrushSize      gls.Uniform
@@ -49,7 +50,7 @@ type TerrainMaterial struct {
 	uniformEnableErosion  gls.Uniform
 
 	CameraPosition math32.Vector3
-	Size           int
+	Resolution     int
 	BrushPosition  math32.Vector2
 	BrushSize      float32
 	BrushType      BrushType
@@ -60,13 +61,14 @@ type TerrainMaterial struct {
 }
 
 // NewTerrainMaterial initializes a terrain with OpenSimplex noise.
-func NewTerrainMaterial(size int) *TerrainMaterial {
+func NewTerrainMaterial(resolution int) *TerrainMaterial {
 	m := &TerrainMaterial{
-		Size:      size,
-		BrushSize: 0.1,
+		Resolution: resolution,
+		BrushSize:  0.1,
 	}
 	blue := math32.ColorName("blue")
 	m.Init("terrain", &blue)
+	m.uniformResolution.Init("Resolution")
 	m.uniformCameraPosition.Init("CameraPosition")
 	m.uniformBrushPosition.Init("BrushPosition")
 	m.uniformBrushSize.Init("BrushSize")
@@ -78,9 +80,9 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 	noise := opensimplex.NewNormalized32(0)
 	var heightmap []float32
 	var zeros []float32
-	for y := 0; y < m.Size; y++ {
-		for x := 0; x < m.Size; x++ {
-			height := math32.Max(0, 100*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-20)
+	for y := 0; y < m.Resolution; y++ {
+		for x := 0; x < m.Resolution; x++ {
+			height := math32.Max(0, 30*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-10)
 			heightmap = append(heightmap, height)
 			heightmap = append(heightmap, 0)
 			heightmap = append(heightmap, 0)
@@ -91,12 +93,12 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 			zeros = append(zeros, 0)
 		}
 	}
-	heightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
-	nextHeightTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
-	flowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
-	nextFlowTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
-	sedimentTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
-	nextSedimentTexture := texture.NewTexture2DFromData(m.Size, m.Size, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	heightTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, heightmap)
+	nextHeightTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	flowTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	nextFlowTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	sedimentTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
+	nextSedimentTexture := texture.NewTexture2DFromData(m.Resolution, m.Resolution, gls.RGBA, gls.FLOAT, gls.RGBA32F, zeros)
 	heightTexture.SetMagFilter(gls.NEAREST)
 	heightTexture.SetMinFilter(gls.NEAREST)
 	nextHeightTexture.SetMagFilter(gls.NEAREST)
@@ -108,7 +110,7 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 		if err != nil {
 			panic(err)
 		}
-		tex.SetRepeat(float32(m.Size)/2, float32(m.Size)/2)
+		tex.SetRepeat(float32(m.Resolution)/2, float32(m.Resolution)/2)
 		tex.SetWrapS(gls.REPEAT)
 		tex.SetWrapT(gls.REPEAT)
 		m.AddTexture(tex)
@@ -124,6 +126,7 @@ func NewTerrainMaterial(size int) *TerrainMaterial {
 // It updates shader uniform variables with their Go values.
 func (m *TerrainMaterial) RenderSetup(gl *gls.GLS) {
 	m.Standard.RenderSetup(gl)
+	gl.Uniform1f(m.uniformResolution.Location(gl), float32(m.Resolution))
 	gl.Uniform3f(m.uniformCameraPosition.Location(gl), m.CameraPosition.X, m.CameraPosition.Y, m.CameraPosition.Z)
 	gl.Uniform2f(m.uniformBrushPosition.Location(gl), m.BrushPosition.X, m.BrushPosition.Y)
 	gl.Uniform1f(m.uniformBrushSize.Location(gl), m.BrushSize)
@@ -203,8 +206,8 @@ func main() {
 	// Set up orbit control for the camera
 	camera.NewOrbitControl(cam)
 
-	terrain := NewTerrainMaterial(128)
-	geom := geometry.NewSegmentedPlane(float32(terrain.Size), float32(terrain.Size), terrain.Size, terrain.Size)
+	terrain := NewTerrainMaterial(1024)
+	geom := geometry.NewSegmentedPlane(128, 128, 128, 128)
 	mesh := graphic.NewMesh(geom, terrain)
 	mesh.RotateX(-90 * math.Pi / 180)
 	scene.Add(mesh)
@@ -365,7 +368,7 @@ func main() {
 		// Compute shader passes
 		a.Gls().Enable(gls.COLOR_LOGIC_OP)
 		a.Gls().BindFramebuffer(computeFramebuffer)
-		a.Gls().Viewport(0, 0, int32(terrain.Size), int32(terrain.Size))
+		a.Gls().Viewport(0, 0, int32(terrain.Resolution), int32(terrain.Resolution))
 
 		a.Gls().FramebufferTexture(gls.COLOR_ATTACHMENT0, terrain.Textures[1].TexName())
 		terrain.SetShader("apply_brush")

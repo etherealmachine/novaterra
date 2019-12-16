@@ -4,6 +4,7 @@
 
 precision highp float;
 
+uniform float Resolution;
 uniform vec2 BrushPosition;
 uniform float BrushSize;
 uniform bool FlatNormal;
@@ -72,7 +73,7 @@ void main() {
 	float erosion  = texture(MatTexture[10], FragTexcoord).z;
 	float deposition = texture(MatTexture[10], FragTexcoord).w;
 
-  float e = 1.0/128.0;
+  float e = 1.0/Resolution;
 	vec4 flowOut = texture(MatTexture[8], FragTexcoord);
 	vec4 flowIn = vec4(
 		texture(MatTexture[8], vec2(FragTexcoord.x-e, FragTexcoord.y)).y,
