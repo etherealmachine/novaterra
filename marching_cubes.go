@@ -360,7 +360,7 @@ func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isolevel f
 	for i := range edgeConnections {
 		if edges[index]&(1<<i) != 0 {
 			i0, i1 := edgeConnections[i][0], edgeConnections[i][1]
-			l[i] = n[i0].Lerp(n[i1], 0.5) //(isolevel-v[i0])/(v[i1]-v[i0]))
+			l[i] = n[i0].Clone().Lerp(n[i1], 0.5) //(isolevel-v[i0])/(v[i1]-v[i0]))
 		}
 	}
 	var vertices []*math32.Vector3
@@ -411,9 +411,12 @@ func main() {
 
 	// Create a mesh and add it to the scene
 	geom := geometry.NewGeometry()
-	vertices := marchCubes(func(v *math32.Vector3) float32 {
-		return v.DistanceTo(&math32.Vector3{0, 0, 0})
-	}, 3)
+	/*
+		vertices := marchCubes(func(v *math32.Vector3) float32 {
+			return v.DistanceTo(&math32.Vector3{0, 0, 0})
+		}, 3)
+	*/
+	var vertices []*math32.Vector3
 	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(computeNormals(vertices)).AddAttrib(gls.VertexNormal))
 	geom.SetIndices(indices(vertices))
