@@ -13,6 +13,7 @@ import (
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
+	"github.com/g3n/engine/window"
 )
 
 var (
@@ -359,7 +360,7 @@ func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isolevel f
 	for i := range edgeConnections {
 		if edges[index]&(1<<i) != 0 {
 			i0, i1 := edgeConnections[i][0], edgeConnections[i][1]
-			l[i] = n[i0].Lerp(n[i1], (isolevel-v[i0])/(v[i1]-v[i0]))
+			l[i] = n[i0].Lerp(n[i1], 0.5) //(isolevel-v[i0])/(v[i1]-v[i0]))
 		}
 	}
 	var vertices []*math32.Vector3
@@ -417,8 +418,63 @@ func main() {
 	geom.AddVBO(gls.NewVBO(computeNormals(vertices)).AddAttrib(gls.VertexNormal))
 	geom.SetIndices(indices(vertices))
 	mat := material.NewStandard(math32.NewColor("Green"))
+	mat.SetSide(material.SideDouble)
 	mesh := graphic.NewMesh(geom, mat)
 	scene.Add(mesh)
+
+	neighbors := [8]*math32.Vector3{
+		{0, 0, 0},
+		{10, 0, 0},
+		{10, 0, 10},
+		{0, 0, 10},
+		{0, 10, 0},
+		{10, 10, 0},
+		{10, 10, 10},
+		{0, 10, 10},
+	}
+	var neighborMeshes []*graphic.Points
+	for i, n := range neighbors {
+		g := geometry.NewGeometry()
+		g.AddVBO(gls.NewVBO(math32.ArrayF32{n.X, n.Y, n.Z}).AddAttrib(gls.VertexPosition))
+		m := material.NewPoint(math32.NewColor("White"))
+		m.SetSize(100)
+		neighborMeshes = append(neighborMeshes, graphic.NewPoints(g, m))
+		scene.Add(neighborMeshes[i])
+	}
+
+	index := -1
+	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
+		e := ev.(*window.KeyEvent)
+		if e.Key == window.KeyTab {
+			index++
+			if index >= len(edges) {
+				index = 0
+			}
+			for i := 0; i < 8; i++ {
+				if index&(1<<i) != 0 {
+					neighborMeshes[i].ClearMaterials()
+					m := material.NewPoint(math32.NewColor("Red"))
+					m.SetSize(100)
+					neighborMeshes[i].AddMaterial(neighborMeshes[i], m, 0, 0)
+				} else {
+					neighborMeshes[i].ClearMaterials()
+					m := material.NewPoint(math32.NewColor("White"))
+					m.SetSize(100)
+					neighborMeshes[i].AddMaterial(neighborMeshes[i], m, 0, 0)
+				}
+			}
+			vertices = generateTriangles(
+				index,
+				neighbors,
+				[8]float32{0, 0, 0, 0, 0, 0, 0, 0},
+				0,
+			)
+			geom.Init()
+			geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
+			geom.AddVBO(gls.NewVBO(computeNormals(vertices)).AddAttrib(gls.VertexNormal))
+			geom.SetIndices(indices(vertices))
+		}
+	})
 
 	// Lights
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
