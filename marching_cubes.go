@@ -371,30 +371,32 @@ func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isolevel f
 	return vertices
 }
 
+func marchCube(origin *math32.Vector3, isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
+	var n [8]*math32.Vector3
+	var v [8]float32
+	for i, offset := range neighborOffsets {
+		n[i] = origin.Clone().Add(offset)
+		v[i] = isosurface(n[i])
+	}
+	index := 0
+	for i, value := range v {
+		if value < isolevel {
+			index |= (1 << i)
+		}
+	}
+	if edges[index] == 0 {
+		return nil
+	}
+	return generateTriangles(index, n, v, isolevel)
+}
+
 func marchCubes(isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
 	var vertices []*math32.Vector3
 	for i := 0; i < 10; i++ {
 		for j := 0; j < 10; j++ {
 			for k := 0; k < 10; k++ {
-				x := float32(i) - 5
-				y := float32(j) - 5
-				z := float32(k) - 5
-				index := 0
-				var n [8]*math32.Vector3
-				var v [8]float32
-				for i, offset := range neighborOffsets {
-					n[i] = (&math32.Vector3{x, y, z}).Add(offset)
-					v[i] = isosurface(n[i])
-				}
-				for i, value := range v {
-					if value < isolevel {
-						index |= (1 << i)
-					}
-				}
-				if edges[i] == 0 {
-					continue
-				}
-				vertices = append(vertices, generateTriangles(index, n, v, isolevel)...)
+				v := &math32.Vector3{float32(i) - 5, float32(j) - 5, float32(k) - 5}
+				vertices = append(vertices, marchCube(v, isosurface, isolevel)...)
 			}
 		}
 	}
