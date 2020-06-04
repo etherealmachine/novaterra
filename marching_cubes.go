@@ -8,6 +8,7 @@ import (
 	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
+	"github.com/g3n/engine/experimental/collision"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -439,23 +440,50 @@ func NewPointsMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewPoints(geom, mat)
 }
 
-func NewNormalsMesh(vertices []*math32.Vector3) graphic.IGraphic {
-	lines := make([]float32, len(vertices)*2)
-	for i := 0; i < len(vertices); i += 3 {
-		t := math32.NewTriangle(vertices[i], vertices[i+1], vertices[i+2])
-		c := vertices[i].Clone().Add(vertices[i+1].Clone()).Add(vertices[i+2].Clone()).MultiplyScalar(1.0 / 3.0)
-		n := c.Clone().Add(t.Normal(nil))
-		lines = append(lines, c.X)
-		lines = append(lines, c.Y)
-		lines = append(lines, c.Z)
-		lines = append(lines, n.X)
-		lines = append(lines, n.Y)
-		lines = append(lines, n.Z)
+func NewLinesMesh(points []*math32.Vector3) graphic.IGraphic {
+	lines := make([]float32, len(points)*3)
+	for i := 0; i < len(points)/2; i++ {
+		from := points[i*2]
+		to := points[i*2+1]
+		lines[i*6] = from.X
+		lines[i*6+1] = from.Y
+		lines[i*6+2] = from.Z
+		lines[i*6+3] = to.X
+		lines[i*6+4] = to.Y
+		lines[i*6+5] = to.Z
 	}
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
 	mat := material.NewStandard(math32.NewColor("Red"))
 	return graphic.NewLines(geom, mat)
+}
+
+func NewNormalsMesh(vertices []*math32.Vector3) graphic.IGraphic {
+	lines := make([]float32, len(vertices)*2)
+	for i := 0; i < len(vertices)/3; i++ {
+		t := math32.NewTriangle(vertices[i*3], vertices[i*3+1], vertices[i*3+2])
+		c := vertices[i*3].Clone().Add(vertices[i*3+1].Clone()).Add(vertices[i*3+2].Clone()).MultiplyScalar(1.0 / 3.0)
+		n := c.Clone().Add(t.Normal(nil))
+		lines[i*6] = c.X
+		lines[i*6+1] = c.Y
+		lines[i*6+2] = c.Z
+		lines[i*6+3] = n.X
+		lines[i*6+4] = n.Y
+		lines[i*6+5] = n.Z
+	}
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
+	mat := material.NewStandard(math32.NewColor("Red"))
+	return graphic.NewLines(geom, mat)
+}
+
+func removeNodeByName(node *core.Node, name string) {
+	for i, child := range node.Children() {
+		if child.Name() == name {
+			node.RemoveAt(i)
+			return
+		}
+	}
 }
 
 func main() {
@@ -522,6 +550,7 @@ func main() {
 	cam := camera.New(1)
 	cam.SetPosition(0, 0, 40)
 	camControl := camera.NewOrbitControl(cam)
+	camControl.SetEnabled(camera.OrbitZoom | camera.OrbitKeys)
 	camControl.Rotate(math32.DegToRad(45), math32.DegToRad(-25))
 	scene.Add(cam)
 
@@ -554,10 +583,74 @@ func main() {
 			newPos := (&p).Add(offset)
 			group.SetPosition(newPos.X, newPos.Y, newPos.Z)
 		}
+
+		switch e.Key {
+		case window.KeyUp:
+			camControl.Rotate(0, -camControl.KeyRotSpeed)
+		case window.KeyDown:
+			camControl.Rotate(0, camControl.KeyRotSpeed)
+		case window.KeyLeft:
+			camControl.Rotate(-camControl.KeyRotSpeed, 0)
+		case window.KeyRight:
+			camControl.Rotate(camControl.KeyRotSpeed, 0)
+		}
+	})
+
+	mouseX, mouseY := float32(0), float32(0)
+	a.SubscribeID(window.OnCursor, a, func(evname string, ev interface{}) {
+		e := ev.(*window.CursorEvent)
+		mouseX = e.Xpos
+		mouseY = e.Ypos
+	})
+
+	caster := collision.NewRaycaster(&math32.Vector3{}, &math32.Vector3{})
+	mouseDown := false
+	a.SubscribeID(window.OnMouseDown, a, func(evname string, ev interface{}) {
+		mouseDown = true
+	})
+	a.SubscribeID(window.OnMouseUp, a, func(evname string, ev interface{}) {
+		mouseDown = false
 	})
 
 	log.Println("Action!")
 	a.Run(func(renderer *renderer.Renderer, _ time.Duration) {
+
+		if mouseDown {
+			width, height := a.GetSize()
+			x := 2*(mouseX/float32(width)) - 1
+			y := -2*(mouseY/float32(height)) + 1
+
+			caster.SetFromCamera(cam, x, y)
+			intersects := caster.IntersectObject(mesh, false)
+			if len(intersects) > 0 {
+				firstHit := intersects[0]
+				voxelX := int(math32.Floor(firstHit.Point.X)) + 50
+				voxelY := int(math32.Floor(firstHit.Point.Y))
+				voxelZ := int(math32.Floor(firstHit.Point.Z)) + 50
+				for voxelY++; voxelY < 100; voxelY++ {
+					if voxels[voxelX][voxelY][voxelZ] == false {
+						voxels[voxelX][voxelY][voxelZ] = true
+						break
+					}
+				}
+				vertices = marchCubes(len(voxels), func(v *math32.Vector3) float32 {
+					x, y, z := int(v.X), int(v.Y), int(v.Z)
+					if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) && voxels[x][y][z] {
+						return 1
+					}
+					return 0
+				}, 1)
+				geom := mesh.(*graphic.Mesh).GetGeometry()
+				geom.Init()
+				indices := indices(len(vertices))
+				positions := flatten(vertices)
+				normals := computeNormals(vertices)
+				geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+				geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+				geom.SetIndices(indices)
+			}
+		}
+
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
