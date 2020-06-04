@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/g3n/engine/app"
@@ -13,6 +14,7 @@ import (
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
+	"github.com/g3n/engine/window"
 )
 
 var (
@@ -314,14 +316,14 @@ var (
 		{0, 4}, {1, 5}, {2, 6}, {3, 7},
 	}
 	neighborOffsets = [8]*math32.Vector3{
-		&math32.Vector3{-1, -1, -1},
-		&math32.Vector3{1, -1, -1},
-		&math32.Vector3{1, 1, -1},
-		&math32.Vector3{-1, 1, -1},
-		&math32.Vector3{-1, -1, 1},
-		&math32.Vector3{1, -1, 1},
+		&math32.Vector3{0, 0, 0},
+		&math32.Vector3{1, 0, 0},
+		&math32.Vector3{1, 1, 0},
+		&math32.Vector3{0, 1, 0},
+		&math32.Vector3{0, 0, 1},
+		&math32.Vector3{1, 0, 1},
 		&math32.Vector3{1, 1, 1},
-		&math32.Vector3{-1, 1, 1},
+		&math32.Vector3{0, 1, 1},
 	}
 )
 
@@ -336,37 +338,41 @@ func flatten(l []*math32.Vector3) math32.ArrayF32 {
 }
 
 func computeNormals(vertices []*math32.Vector3) math32.ArrayF32 {
-	normals := math32.NewArrayF32(len(vertices), len(vertices))
-	for i := 0; i < len(vertices)/3; i++ {
-		n := math32.Normal(vertices[i*3], vertices[i*3+1], vertices[i*3+2], nil)
-		normals[i*3] = n.X
-		normals[i*3+1] = n.Y
-		normals[i*3+2] = n.Z
+	normals := math32.NewArrayF32(3*len(vertices), 3*len(vertices))
+	for i := 0; i < len(vertices); i += 3 {
+		t := math32.NewTriangle(vertices[i], vertices[i+1], vertices[i+2])
+		n := t.Normal(nil)
+		for j := 0; j < 3; j++ {
+			normals[i*3+j*3] = n.X
+			normals[i*3+j*3+1] = n.Y
+			normals[i*3+j*3+2] = n.Z
+		}
 	}
 	return normals
 }
 
-func indices(vertices []*math32.Vector3) math32.ArrayU32 {
-	indices := math32.NewArrayU32(len(vertices), len(vertices))
-	for i := range vertices {
-		indices[i] = uint32(i)
-	}
-	return indices
-}
-
-func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isolevel float32) []*math32.Vector3 {
+func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
 	var l [12]*math32.Vector3
 	for i := range edgeConnections {
 		if edges[index]&(1<<i) != 0 {
 			i0, i1 := edgeConnections[i][0], edgeConnections[i][1]
-			l[i] = n[i0].Clone().Lerp(n[i1], (isolevel-v[i0])/(v[i1]-v[i0]))
+			l[i] = n[i0].Clone().Lerp(n[i1], 0.5)
 		}
 	}
 	var vertices []*math32.Vector3
 	for i := 0; triangles[index][i] != -1; i += 3 {
-		vertices = append(vertices, l[triangles[index][i]])
-		vertices = append(vertices, l[triangles[index][i+1]])
-		vertices = append(vertices, l[triangles[index][i+2]])
+		a, b, c := l[triangles[index][i]], l[triangles[index][i+1]], l[triangles[index][i+2]]
+		n := math32.NewTriangle(a, b, c).Normal(nil).MultiplyScalar(0.01)
+		nI := n.Clone().Negate()
+		if isosurface(n) < isolevel && isosurface(nI) > isolevel {
+			vertices = append(vertices, a)
+			vertices = append(vertices, b)
+			vertices = append(vertices, c)
+		} else {
+			vertices = append(vertices, c)
+			vertices = append(vertices, b)
+			vertices = append(vertices, a)
+		}
 	}
 	return vertices
 }
@@ -387,20 +393,78 @@ func marchCube(origin *math32.Vector3, isosurface func(v *math32.Vector3) float3
 	if edges[index] == 0 {
 		return nil
 	}
-	return generateTriangles(index, n, v, isolevel)
+	return generateTriangles(index, n, v, isosurface, isolevel)
 }
 
-func marchCubes(isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
+func marchCubes(resolution int, isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
 	var vertices []*math32.Vector3
-	for i := 0; i < 10; i++ {
-		for j := 0; j < 10; j++ {
-			for k := 0; k < 10; k++ {
-				v := &math32.Vector3{float32(i) - 5, float32(j) - 5, float32(k) - 5}
+	res := resolution / 2
+	cubeSize := float32(resolution) / 10
+	for i := -res; i < res; i++ {
+		for j := -res; j < res; j++ {
+			for k := -res; k < res; k++ {
+				v := &math32.Vector3{float32(i) / cubeSize, float32(j) / cubeSize, float32(k) / cubeSize}
 				vertices = append(vertices, marchCube(v, isosurface, isolevel)...)
 			}
 		}
 	}
 	return vertices
+}
+
+func indices(count int) math32.ArrayU32 {
+	l := make([]uint32, count)
+	for i := 0; i < count; i++ {
+		l[i] = uint32(i)
+	}
+	return math32.ArrayU32(l)
+}
+
+func NewMesh(vertices []*math32.Vector3) graphic.IGraphic {
+	geom := geometry.NewGeometry()
+	indices := indices(len(vertices))
+	positions := flatten(vertices)
+	normals := computeNormals(vertices)
+	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.SetIndices(indices)
+	mat := material.NewStandard(math32.NewColor("Green"))
+	mat.SetSide(material.SideDouble)
+	return graphic.NewMesh(geom, mat)
+}
+
+func NewWireframeMesh(vertices []*math32.Vector3) graphic.IGraphic {
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
+	mat := material.NewStandard(math32.NewColor("White"))
+	mat.SetWireframe(true)
+	return graphic.NewMesh(geom, mat)
+}
+
+func NewPointsMesh(vertices []*math32.Vector3) graphic.IGraphic {
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
+	mat := material.NewPoint(math32.NewColor("White"))
+	mat.SetSize(50)
+	return graphic.NewPoints(geom, mat)
+}
+
+func NewNormalsMesh(vertices []*math32.Vector3) graphic.IGraphic {
+	lines := make([]float32, len(vertices)*2)
+	for i := 0; i < len(vertices); i += 3 {
+		t := math32.NewTriangle(vertices[i], vertices[i+1], vertices[i+2])
+		c := vertices[i].Clone().Add(vertices[i+1].Clone()).Add(vertices[i+2].Clone()).MultiplyScalar(1.0 / 3.0)
+		n := c.Clone().Add(t.Normal(nil))
+		lines = append(lines, c.X)
+		lines = append(lines, c.Y)
+		lines = append(lines, c.Z)
+		lines = append(lines, n.X)
+		lines = append(lines, n.Y)
+		lines = append(lines, n.Z)
+	}
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
+	mat := material.NewStandard(math32.NewColor("Red"))
+	return graphic.NewLines(geom, mat)
 }
 
 func main() {
@@ -409,26 +473,37 @@ func main() {
 	scene := core.NewNode()
 
 	// Create a mesh and add it to the scene
-	geom := geometry.NewGeometry()
-	vertices := marchCubes(func(v *math32.Vector3) float32 {
-		return v.DistanceTo(&math32.Vector3{0, 0, 0})
-	}, 3)
-	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
-	geom.AddVBO(gls.NewVBO(computeNormals(vertices)).AddAttrib(gls.VertexNormal))
-	geom.SetIndices(indices(vertices))
-	mat := material.NewStandard(math32.NewColor("Green"))
-	mat.SetSide(material.SideDouble)
-	mesh := graphic.NewMesh(geom, mat)
-	scene.Add(mesh)
+	vertices := marchCubes(10, func(v *math32.Vector3) float32 {
+		d := v.DistanceTo(&math32.Vector3{0, 0, 0})
+		return math32.Sin(d)
+	}, 0.1)
+	mesh := NewMesh(vertices)
+	mesh.SetName("Mesh")
+	wireframe := NewWireframeMesh(vertices)
+	wireframe.SetName("Wireframe")
+	points := NewPointsMesh(vertices)
+	points.SetName("Points")
+	normals := NewNormalsMesh(vertices)
+	normals.SetName("Normals")
+	group := core.NewNode()
+	group.Add(mesh)
+	group.Add(wireframe)
+	group.Add(points)
+	group.Add(normals)
+	scene.Add(group)
 
-	// Lights
+	log.Println("Lights")
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
 	scene.Add(ambientLight)
-	pointLight := light.NewPoint(&math32.Color{1, 1, 1}, 5.0)
-	pointLight.SetPosition(1, 0, 2)
+	mat := material.NewStandard(math32.NewColor("White"))
+	sphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), mat)
+	sphere.SetPosition(20, 0, 40)
+	scene.Add(sphere)
+	pointLight := light.NewPoint(math32.NewColor("White"), 100.0)
+	pointLight.SetPosition(2, 0, 4)
 	scene.Add(pointLight)
 
-	// Camera
+	log.Println("Camera")
 	cam := camera.New(1)
 	cam.SetPosition(0, 0, 40)
 	camControl := camera.NewOrbitControl(cam)
@@ -439,7 +514,16 @@ func main() {
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
 	cam.SetAspect(float32(width) / float32(height))
 
-	// Action!
+	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
+		e := ev.(*window.KeyEvent)
+		if e.Key == window.KeyTab {
+			wireframe.SetVisible(!wireframe.Visible())
+			points.SetVisible(!points.Visible())
+			normals.SetVisible(!normals.Visible())
+		}
+	})
+
+	log.Println("Action!")
 	a.Run(func(renderer *renderer.Renderer, _ time.Duration) {
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
