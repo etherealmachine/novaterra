@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/g3n/engine/app"
@@ -341,7 +342,7 @@ func computeNormals(vertices []*math32.Vector3) math32.ArrayF32 {
 	normals := math32.NewArrayF32(3*len(vertices), 3*len(vertices))
 	for i := 0; i < len(vertices); i += 3 {
 		t := math32.NewTriangle(vertices[i], vertices[i+1], vertices[i+2])
-		n := t.Normal(nil)
+		n := t.Normal(nil).Negate()
 		for j := 0; j < 3; j++ {
 			normals[i*3+j*3] = n.X
 			normals[i*3+j*3+1] = n.Y
@@ -362,17 +363,9 @@ func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isosurface
 	var vertices []*math32.Vector3
 	for i := 0; triangles[index][i] != -1; i += 3 {
 		a, b, c := l[triangles[index][i]], l[triangles[index][i+1]], l[triangles[index][i+2]]
-		n := math32.NewTriangle(a, b, c).Normal(nil).MultiplyScalar(0.01)
-		nI := n.Clone().Negate()
-		if isosurface(n) < isolevel && isosurface(nI) > isolevel {
-			vertices = append(vertices, a)
-			vertices = append(vertices, b)
-			vertices = append(vertices, c)
-		} else {
-			vertices = append(vertices, c)
-			vertices = append(vertices, b)
-			vertices = append(vertices, a)
-		}
+		vertices = append(vertices, a)
+		vertices = append(vertices, b)
+		vertices = append(vertices, c)
 	}
 	return vertices
 }
@@ -396,14 +389,12 @@ func marchCube(origin *math32.Vector3, isosurface func(v *math32.Vector3) float3
 	return generateTriangles(index, n, v, isosurface, isolevel)
 }
 
-func marchCubes(resolution int, isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
+func marchCubes(size int, isosurface func(v *math32.Vector3) float32, isolevel float32) []*math32.Vector3 {
 	var vertices []*math32.Vector3
-	res := resolution / 2
-	cubeSize := float32(resolution) / 10
-	for i := -res; i < res; i++ {
-		for j := -res; j < res; j++ {
-			for k := -res; k < res; k++ {
-				v := &math32.Vector3{float32(i) / cubeSize, float32(j) / cubeSize, float32(k) / cubeSize}
+	for i := -1; i <= size; i++ {
+		for j := -1; j <= size; j++ {
+			for k := -1; k <= size; k++ {
+				v := &math32.Vector3{float32(i), float32(j), float32(k)}
 				vertices = append(vertices, marchCube(v, isosurface, isolevel)...)
 			}
 		}
@@ -472,24 +463,48 @@ func main() {
 	a := app.App()
 	scene := core.NewNode()
 
+	voxels := make([][][]bool, 100)
+	for x := 0; x < 100; x++ {
+		voxels[x] = make([][]bool, 100)
+		for y := 0; y < 100; y++ {
+			voxels[x][y] = make([]bool, 100)
+		}
+	}
+	for x := 0; x < 100; x++ {
+		for z := 0; z < 100; z++ {
+			for y := 0; y < 100; y++ {
+				if y < 2 || (voxels[x][y-1][z] && rand.Float32() < 0.2) {
+					voxels[x][y][z] = true
+				}
+			}
+		}
+	}
+
 	// Create a mesh and add it to the scene
-	vertices := marchCubes(10, func(v *math32.Vector3) float32 {
-		d := v.DistanceTo(&math32.Vector3{0, 0, 0})
-		return math32.Sin(d)
-	}, 0.1)
+	vertices := marchCubes(len(voxels), func(v *math32.Vector3) float32 {
+		x, y, z := int(v.X), int(v.Y), int(v.Z)
+		if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) && voxels[x][y][z] {
+			return 1
+		}
+		return 0
+	}, 1)
 	mesh := NewMesh(vertices)
 	mesh.SetName("Mesh")
 	wireframe := NewWireframeMesh(vertices)
+	wireframe.SetVisible(false)
 	wireframe.SetName("Wireframe")
 	points := NewPointsMesh(vertices)
+	points.SetVisible(false)
 	points.SetName("Points")
 	normals := NewNormalsMesh(vertices)
+	normals.SetVisible(false)
 	normals.SetName("Normals")
 	group := core.NewNode()
 	group.Add(mesh)
 	group.Add(wireframe)
 	group.Add(points)
 	group.Add(normals)
+	group.SetPosition(-50, 0, -50)
 	scene.Add(group)
 
 	log.Println("Lights")
@@ -497,10 +512,10 @@ func main() {
 	scene.Add(ambientLight)
 	mat := material.NewStandard(math32.NewColor("White"))
 	sphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), mat)
-	sphere.SetPosition(20, 0, 40)
+	sphere.SetPosition(40, 40, 40)
 	scene.Add(sphere)
-	pointLight := light.NewPoint(math32.NewColor("White"), 100.0)
-	pointLight.SetPosition(2, 0, 4)
+	pointLight := light.NewPoint(math32.NewColor("White"), 1000.0)
+	pointLight.SetPosition(40, 40, 40)
 	scene.Add(pointLight)
 
 	log.Println("Camera")
@@ -520,6 +535,24 @@ func main() {
 			wireframe.SetVisible(!wireframe.Visible())
 			points.SetVisible(!points.Visible())
 			normals.SetVisible(!normals.Visible())
+		}
+		var offset *math32.Vector3
+		if e.Key == window.KeyW {
+			offset = &math32.Vector3{-10, 0, 0}
+		}
+		if e.Key == window.KeyA {
+			offset = &math32.Vector3{0, 0, 10}
+		}
+		if e.Key == window.KeyS {
+			offset = &math32.Vector3{10, 0, 0}
+		}
+		if e.Key == window.KeyD {
+			offset = &math32.Vector3{0, 0, -10}
+		}
+		if offset != nil {
+			p := group.Position()
+			newPos := (&p).Add(offset)
+			group.SetPosition(newPos.X, newPos.Y, newPos.Z)
 		}
 	})
 
