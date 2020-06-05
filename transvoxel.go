@@ -10,7 +10,6 @@ import (
 	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
-	"github.com/g3n/engine/experimental/collision"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -21,53 +20,93 @@ import (
 	"github.com/g3n/engine/window"
 )
 
-func marchTransvoxelCube(x, y, z int, voxels [][][]int8) ([]float32, []float32, []uint32) {
-	c := [8]int8{
-		voxels[x][y][z],
-		voxels[x+1][y][z],
-		voxels[x][y][z+1],
-		voxels[x+1][y][z+1],
-		voxels[x][y+1][z],
-		voxels[x][y+1][z+1],
-		voxels[x+1][y+1][z+1],
-	}
-	index := ((c[0] >> 7) & 0x01) |
+var cornerVertices = [8][3]float32{
+	{0, 0, 0},
+	{1, 0, 0},
+	{0, 0, 1},
+	{1, 0, 1},
+	{0, 1, 0},
+	{1, 1, 0},
+	{0, 1, 1},
+	{1, 1, 1},
+}
+
+func generateTransvoxelMesh(c [8]int8, voxels [][][]int8) ([]float32, []float32, []uint32) {
+	index := uint8(((c[0] >> 7) & 0x01) |
 		((c[1] >> 6) & 0x02) |
 		((c[2] >> 5) & 0x04) |
 		((c[3] >> 4) & 0x08) |
 		((c[4] >> 3) & 0x10) |
 		((c[5] >> 2) & 0x20) |
 		((c[6] >> 1) & 0x40) |
-		int8((byte(c[7]) & 0x80))
-	if (index ^ int8((byte(c[7])>>7)&0xFF)) != 0 {
-		cell := RegularCellData[RegularCellClass[index]]
-		log.Println(cell.GetVertexCount(), cell.GetTriangleCount())
-		for _, edgeCode := range RegularVertexData[index] {
-			if edgeCode == 0 {
-				break
+		int8((byte(c[7]) & 0x80)))
+	var positions []float32
+	var normals []float32
+	var indices []uint32
+	if (index ^ uint8((byte(c[7])>>7)&0xFF)) != 0 {
+
+		/*
+			var cornerNormals [8][3]float32
+			for i := 0; i < 8; i++ {
+				p := cornerVertices[i]
+				x, y, z := int(p[0]), int(p[1]), int(p[2])
+				nx := float32(voxels[x+1][y][z]-voxels[x-1][y][z]) * 0.5
+				ny := float32(voxels[x][y+1][z]-voxels[x][y-1][z]) * 0.5
+				nz := float32(voxels[x][y][z+1]-voxels[x][y][z-1]) * 0.5
+				cornerNormals[i][0] = nx
+				cornerNormals[i][1] = ny
+				cornerNormals[i][2] = nz
 			}
-			v0 := (edgeCode >> 4) & 0x0F
-			v1 := edgeCode & 0x0F
-			d0, d1 := c[v0], c[v1]
-			t := int16((d1 << 8) / (d1 - d0))
-			if (t & 0x00FF) != 0 {
-				// Vertex lies in the interior of the edge.
-				//u := 0x0100 - t
-				//Q := t*P0 + u*P1
+		*/
+
+		cell := RegularCellData[RegularCellClass[index]]
+		vertexLocations := RegularVertexData[index]
+		vertexCount := cell.GetVertexCount()
+		triangleCount := cell.GetTriangleCount()
+		log.Printf("%d vertices and %d triangles", vertexCount, triangleCount)
+		for i := 0; i < vertexCount; i++ {
+			edge := vertexLocations[i] >> 8
+			reuseIndex := edge & 0xF               // Vertex id which should be created or reused 1, 2 or 3
+			rDir := edge >> 4                      // Direction to go to reach a previous cell for reusing
+			v0 := (vertexLocations[i] >> 4) & 0x0F // First Corner Index
+			v1 := (vertexLocations[i]) & 0x0F      // Second Corner Index
+			d0 := c[v0]
+			d1 := c[v1]
+			t := float32(d1) / float32(d1-d0)
+			log.Printf("vertex %d, reuse %d, direction %d", i, reuseIndex, rDir)
+			if byte(t)&0x00FF != 0 {
+				log.Println(" Vertex lies in the interior of the edge")
 			} else if t == 0 {
-				// Vertex lies at the higher-numbered endpoint.
+				log.Println(" Vertex lies at the higher numbered endpoint")
 				if v1 == 7 {
-					// This cell owns the vertex.
+					log.Println("  This cell owns the vertex")
 				} else {
-					// Reuse corner vertex from a preceding cell.
+					log.Println("  Try to re-use corner vertex from a preceding cell")
 				}
 			} else {
-				// Vertex lies at the lower-numbered endpoint.
-				// Always reuse corner vertex from a preceding cell.
+				log.Println(" Vertex lies at the lower-numbered endpoint. Try to reuse corner vertex from a preceding cell")
 			}
+			// Vertices at the two corners
+			p0 := cornerVertices[v0]
+			p1 := cornerVertices[v1]
+			// Normals at the two corners
+			//n0 := cornerNormals[v0]
+			//n1 := cornerNormals[v1]
+			// Linearly interpolate along the 2 vertices to get the new vertex
+			qX, qY, qZ := p0[0]*t+(1-t)*p1[0], p0[1]*t+(1-t)*p1[1], p0[2]*t+(1-t)*p1[2]
+			//nX, nY, nZ := n0[0]*t+(1-t)*n1[0], n0[1]*t+(1-t)*n1[1], n0[2]*t+(1-t)*n1[2]
+			positions = append(positions, qX)
+			//normals = append(normals, nX)
+			indices = append(indices, uint32(len(positions)-1))
+			positions = append(positions, qY)
+			//normals = append(normals, nY)
+			indices = append(indices, uint32(len(positions)-1))
+			positions = append(positions, qZ)
+			//normals = append(normals, nZ)
+			indices = append(indices, uint32(len(positions)-1))
 		}
 	}
-	return nil, nil, nil
+	return positions, normals, indices
 }
 
 func marchTransvoxels(voxels [][][]int8, N, M, L int) ([]float32, []float32, []uint32) {
@@ -77,7 +116,16 @@ func marchTransvoxels(voxels [][][]int8, N, M, L int) ([]float32, []float32, []u
 	for x := 0; x < N; x++ {
 		for z := 0; z < L; z++ {
 			for y := 0; y < M; y++ {
-				p, n, i := marchTransvoxelCube(x, y, z, voxels)
+				corners := [8]int8{
+					voxels[x][y][z],
+					voxels[x+1][y][z],
+					voxels[x][y][z+1],
+					voxels[x+1][y][z+1],
+					voxels[x][y+1][z],
+					voxels[x][y+1][z+1],
+					voxels[x+1][y+1][z+1],
+				}
+				p, n, i := generateTransvoxelMesh(corners, voxels)
 				positions = append(positions, p...)
 				normals = append(normals, n...)
 				indices = append(indices, i...)
@@ -85,6 +133,26 @@ func marchTransvoxels(voxels [][][]int8, N, M, L int) ([]float32, []float32, []u
 		}
 	}
 	return positions, normals, indices
+}
+
+func transvoxelCase(i int) *graphic.Mesh {
+	corners := [8]int8{
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		-1,
+	}
+	voxels := [][][]int8{
+		{{1, 1, 1}, {1, 1, 1}, {1, 1, 1}},
+		{{1, 1, 1}, {1, -1, 1}, {1, 1, 1}},
+		{{1, 1, 1}, {1, 1, 1}, {1, 1, 1}},
+	}
+	positions, normals, indices := generateTransvoxelMesh(corners, voxels)
+	return NewFastMesh(positions, normals, indices).(*graphic.Mesh)
 }
 
 func transvoxelDemo() {
@@ -116,11 +184,17 @@ func transvoxelDemo() {
 		}
 	}
 
-	// Create a mesh and add it to the scene
-	positions, normals, indices := marchTransvoxels(voxels, N, M, L)
-	mesh := NewFastMesh(positions, normals, indices)
-	mesh.SetName("Mesh")
-	mesh.(*graphic.Mesh).SetPosition(-float32(N)/2, 0, -float32(L)/2)
+	/*
+		// Create a mesh and add it to the scene
+		positions, normals, indices := marchTransvoxels(voxels, N, M, L)
+		mesh := NewFastMesh(positions, normals, indices)
+		mesh.SetName("Mesh")
+		mesh.(*graphic.Mesh).SetPosition(-float32(N)/2, 0, -float32(L)/2)
+		scene.Add(mesh)
+	*/
+
+	index := 0
+	mesh := transvoxelCase(index)
 	scene.Add(mesh)
 
 	log.Println("Lights")
@@ -148,6 +222,15 @@ func transvoxelDemo() {
 
 	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
 		e := ev.(*window.KeyEvent)
+		if e.Key == window.KeyTab {
+			scene.Remove(mesh)
+			index++
+			if index >= 256 {
+				index = 0
+			}
+			mesh = transvoxelCase(index)
+			scene.Add(mesh)
+		}
 		var offset *math32.Vector3
 		if e.Key == window.KeyW {
 			offset = &math32.Vector3{-10, 0, 0}
@@ -164,7 +247,7 @@ func transvoxelDemo() {
 		if offset != nil {
 			p := mesh.Position()
 			newPos := (&p).Add(offset)
-			mesh.(*graphic.Mesh).SetPosition(newPos.X, newPos.Y, newPos.Z)
+			mesh.SetPosition(newPos.X, newPos.Y, newPos.Z)
 		}
 
 		switch e.Key {
@@ -186,7 +269,6 @@ func transvoxelDemo() {
 		mouseY = e.Ypos
 	})
 
-	caster := collision.NewRaycaster(&math32.Vector3{}, &math32.Vector3{})
 	mouseDown := false
 	a.SubscribeID(window.OnMouseDown, a, func(evname string, ev interface{}) {
 		mouseDown = true
@@ -197,40 +279,6 @@ func transvoxelDemo() {
 
 	log.Println("Action!")
 	a.Run(func(renderer *renderer.Renderer, _ time.Duration) {
-
-		if mouseDown {
-			width, height := a.GetSize()
-			x := 2*(mouseX/float32(width)) - 1
-			y := -2*(mouseY/float32(height)) + 1
-
-			caster.SetFromCamera(cam, x, y)
-			intersects := caster.IntersectObject(mesh, false)
-			if len(intersects) > 0 {
-				firstHit := intersects[0]
-				voxelX := int(math32.Round(firstHit.Point.X - mesh.Position().X))
-				voxelY := int(math32.Round(firstHit.Point.Y - mesh.Position().Y))
-				voxelZ := int(math32.Round(firstHit.Point.Z - mesh.Position().Z))
-				for ox := -1; ox <= 1; ox++ {
-					for oy := -1; oy <= 1; oy++ {
-						for oz := -1; oz <= 1; oz++ {
-							x, y, z := voxelX+ox, voxelY+oy, voxelZ+oz
-							if x >= 0 && x < N && y >= 0 && y < M && z >= 0 && z < L {
-								if voxels[x][y][z] < 127 {
-									voxels[x][y][z]++
-								}
-							}
-						}
-					}
-				}
-				positions, normals, indices = marchTransvoxels(voxels, N, M, L)
-				geom := mesh.(*graphic.Mesh).GetGeometry()
-				geom.Init()
-				geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
-				geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
-				geom.SetIndices(indices)
-			}
-		}
-
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)

@@ -9,13 +9,13 @@ type RegularCell struct {
 }
 
 // GetVertexCount returns the number of vertices stored in VertexIndex
-func (c *RegularCell) GetVertexCount() byte {
-	return c.GeometryCounts >> 4
+func (c *RegularCell) GetVertexCount() int {
+	return int(c.GeometryCounts >> 4)
 }
 
 // GetTriangleCount returns the number of triangles stored in VertexIndex
-func (c *RegularCell) GetTriangleCount() byte {
-	return c.GeometryCounts & 0x0F
+func (c *RegularCell) GetTriangleCount() int {
+	return int(c.GeometryCounts & 0x0F)
 }
 
 // TransitionCell holds information about the triangulation used for a single equivalence class in
