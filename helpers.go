@@ -1,6 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
+
+	"github.com/ojrac/opensimplex-go"
+
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -104,4 +109,30 @@ func NewNormalsMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
 	mat := material.NewStandard(math32.NewColor("Red"))
 	return graphic.NewLines(geom, mat)
+}
+
+func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
+	var maxamp float32 = 0
+	var amp float32 = 1
+	freq := scale
+	var value float32 = 0
+
+	for i := 0; i < iters; i++ {
+		value += noise.Eval2(x*freq, y*freq) * amp
+		maxamp += amp
+		amp *= persistence
+		freq *= 2
+	}
+
+	return value / maxamp
+}
+
+func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
+	pixels := gl.ReadPixels(x, y, 1, 1, gls.RGBA, gls.FLOAT)
+	var r, g, b, a float32
+	binary.Read(bytes.NewBuffer(pixels[0:4]), binary.LittleEndian, &r)
+	binary.Read(bytes.NewBuffer(pixels[4:8]), binary.LittleEndian, &g)
+	binary.Read(bytes.NewBuffer(pixels[8:12]), binary.LittleEndian, &b)
+	binary.Read(bytes.NewBuffer(pixels[12:16]), binary.LittleEndian, &a)
+	return &math32.Color4{R: r, G: g, B: b, A: a}
 }

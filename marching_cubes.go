@@ -82,7 +82,7 @@ func marchVoxels(voxels [][][]float32) []*math32.Vector3 {
 	}, 0.5)
 }
 
-func MarchingCubesDemo() {
+func marchingCubesDemo() {
 
 	a := app.App()
 	scene := core.NewNode()
