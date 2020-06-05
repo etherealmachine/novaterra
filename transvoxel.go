@@ -1,40 +1,44 @@
 // Data tables for Eric Lengyel's Transvoxel Algorithm - http://transvoxel.org/
 package main
 
+// RegularCell holds information about the triangulation used for a single equivalence class in the
+// modified Marching Cubes algorithm, described in Section 3.2.
 type RegularCell struct {
 	GeometryCounts byte     // High nibble is vertex count, low nibble is triangle count.
 	VertexIndex    [15]byte // Groups of 3 indexes giving the triangulation.
 }
 
+// GetVertexCount returns the number of vertices stored in VertexIndex
 func (c *RegularCell) GetVertexCount() byte {
 	return c.GeometryCounts >> 4
 }
 
+// GetTriangleCount returns the number of triangles stored in VertexIndex
 func (c *RegularCell) GetTriangleCount() byte {
 	return c.GeometryCounts & 0x0F
 }
 
-// The TransitionCellData structure holds information about the triangulation
-// used for a single equivalence class in the Transvoxel Algorithm transition cell,
-// described in Section 4.3.
+// TransitionCell holds information about the triangulation used for a single equivalence class in
+// the Transvoxel Algorithm transition cell, described in Section 4.3.
 type TransitionCell struct {
 	GeometryCounts byte     // High nibble is vertex count, low nibble is triangle count.
 	VertexIndex    [36]byte // Groups of 3 indexes giving the triangulation.
 }
 
+// GetVertexCount returns the number of vertices stored in VertexIndex
 func (c *TransitionCell) GetVertexCount() byte {
 	return c.GeometryCounts >> 4
 }
 
+// GetTriangleCount returns the number of triangles stored in VertexIndex
 func (c *TransitionCell) GetTriangleCount() byte {
 	return c.GeometryCounts & 0x0F
 }
 
-// RegularCellClass table maps an 8-bit regular Marching Cubes case index to
-// an equivalence class index. Even though there are 18 equivalence classes in our
-// modified Marching Cubes algorithm, a couple of them use the same exact triangulations,
-// just with different vertex locations. We combined those classes for this table so
-// that the class index ranges from 0 to 15.
+// RegularCellClass table maps an 8-bit regular Marching Cubes case index to an equivalence class
+// index. Even though there are 18 equivalence classes in our modified Marching Cubes algorithm, a
+// couple of them use the same exact triangulations, just with different vertex locations. We
+// combined those classes for this table so that the class index ranges from 0 to 15.
 var RegularCellClass = [256]byte{
 	0x00, 0x01, 0x01, 0x03, 0x01, 0x03, 0x02, 0x04, 0x01, 0x02, 0x03, 0x04, 0x03, 0x04, 0x04, 0x03,
 	0x01, 0x03, 0x02, 0x04, 0x02, 0x04, 0x06, 0x0C, 0x02, 0x05, 0x05, 0x0B, 0x05, 0x0A, 0x07, 0x04,
@@ -54,8 +58,8 @@ var RegularCellClass = [256]byte{
 	0x03, 0x04, 0x04, 0x03, 0x04, 0x03, 0x0D, 0x01, 0x04, 0x0D, 0x03, 0x01, 0x03, 0x01, 0x01, 0x00,
 }
 
-// RegularCellData holds the triangulation data for all 16 distinct classes to
-// which a case can be mapped by the RegularCellClass table.
+// RegularCellData holds the triangulation data for all 16 distinct classes to which a case can be
+// mapped by the RegularCellClass table.
 var RegularCellData = [16]RegularCell{
 	{0x00, [15]byte{}},
 	{0x31, [15]byte{0, 1, 2}},
@@ -75,9 +79,9 @@ var RegularCellData = [16]RegularCell{
 	{0x95, [15]byte{0, 4, 5, 0, 3, 4, 0, 1, 3, 1, 2, 3, 6, 7, 8}},
 }
 
-// RegularVertexData gives the vertex locations for every one of the 256 possible
-// cases in the modified Marching Cubes algorithm. Each 16-bit value also provides information
-// about whether a vertex can be reused from a neighboring cell. See Section 3.3 for details.
+// RegularVertexData gives the vertex locations for every one of the 256 possible cases in the
+// modified Marching Cubes algorithm. Each 16-bit value also provides information about whether a
+// vertex can be reused from a neighboring cell. See Section 3.3 for details.
 // The low byte contains the indexes for the two endpoints of the edge on which the vertex lies,
 // as numbered in Figure 3.7. The high byte contains the vertex reuse data shown in Figure 3.8.
 var RegularVertexData = [256][12]uint16{
@@ -339,9 +343,9 @@ var RegularVertexData = [256][12]uint16{
 	{},
 }
 
-// TransitionCellClass maps a 9-bit transition cell case index to an equivalence
-// class index. Even though there are 73 equivalence classes in the Transvoxel Algorithm,
-// several of them use the same exact triangulations, just with different vertex locations.
+// TransitionCellClass maps a 9-bit transition cell case index to an equivalence class index. Even
+// though there are 73 equivalence classes in the Transvoxel Algorithm,  several of them use the
+// same exact triangulations, just with different vertex locations.
 // We combined those classes for this table so that the class index ranges from 0 to 55.
 // The high bit is set in the cases for which the inverse state of the voxel data maps to
 // the equivalence class, meaning that the winding order of each triangle should be reversed.
@@ -380,9 +384,9 @@ var TransitionCellClass = [512]byte{
 	0x85, 0x85, 0x8B, 0x04, 0xA6, 0x25, 0x07, 0x82, 0x84, 0x84, 0x85, 0x81, 0x04, 0x82, 0x81, 0x80,
 }
 
-// TransitionCellData holds the triangulation data for all 56 distinct classes to
-// which a case can be mapped by the TransitionCellClass table. The class index should be ANDed
-// with 0x7F before using it to look up triangulation data in this table.
+// TransitionCellData holds the triangulation data for all 56 distinct classes to which a case can
+// be mapped by the TransitionCellClass table. The class index should be ANDed with 0x7F before
+// using it to look up triangulation data in this table.
 var TransitionCellData = [56]TransitionCell{
 	{0x00, [36]byte{}},
 	{0x42, [36]byte{0, 1, 3, 1, 2, 3}},
@@ -442,17 +446,16 @@ var TransitionCellData = [56]TransitionCell{
 	{0xA8, [36]byte{0, 1, 5, 1, 4, 5, 1, 2, 4, 2, 3, 4, 2, 6, 3, 3, 6, 7, 0, 8, 9, 0, 5, 8}},
 }
 
-// TransitionCornerData contains the transition cell corner reuse data
-// shown in Figure 4.18.
+// TransitionCornerData contains the transition cell corner reuse data shown in Figure 4.18.
 var TransitionCornerData = [13]byte{
 	0x30, 0x21, 0x20, 0x12, 0x40, 0x82, 0x10, 0x81, 0x80, 0x37, 0x27, 0x17, 0x87,
 }
 
-// TransitionVertexData gives the vertex locations for every one of the 512 possible
-// cases in the Tranvoxel Algorithm. Each 16-bit value also provides information about whether
-// a vertex can be reused from a neighboring cell. See Section 4.5 for details. The low byte
-// contains the indexes for the two endpoints of the edge on which the vertex lies, as numbered
-// in Figure 4.16. The high byte contains the vertex reuse data shown in Figure 4.17.
+// TransitionVertexData gives the vertex locations for every one of the 512 possible cases in the
+// Transvoxel Algorithm. Each 16-bit value also provides information about whether a vertex can be
+// reused from a neighboring cell. See Section 4.5 for details. The low byte contains the indexes
+// for the two endpoints of the edge on which the vertex lies, as numbered in Figure 4.16. The high
+// byte contains the vertex reuse data shown in Figure 4.17.
 var TransitionVertexData = [512][12]uint16{
 	{},
 	{0x2301, 0x1503, 0x199B, 0x289A},
