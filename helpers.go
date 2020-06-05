@@ -58,6 +58,16 @@ func NewMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewMesh(geom, mat)
 }
 
+func NewFastMesh(positions []float32, normals []float32, indices []uint32) graphic.IGraphic {
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.SetIndices(indices)
+	mat := material.NewStandard(math32.NewColor("Green"))
+	mat.SetSide(material.SideDouble)
+	return graphic.NewMesh(geom, mat)
+}
+
 func NewWireframeMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))

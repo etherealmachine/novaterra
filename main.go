@@ -9,12 +9,13 @@ var (
 )
 
 func main() {
+	flag.Parse()
 	switch *demo {
 	case "heightmap":
 		heightmapTerrainDemo()
 	case "marching_cubes":
 		marchingCubesDemo()
 	case "transvoxel":
-		marchingCubesDemo()
+		transvoxelDemo()
 	}
 }
