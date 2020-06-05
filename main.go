@@ -175,8 +175,8 @@ func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
 
 func main() {
 
-	//MarchingCubesDemo()
-	//return
+	MarchingCubesDemo()
+	return
 
 	// Create application and scene
 	a := app.App()

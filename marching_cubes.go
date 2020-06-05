@@ -2,8 +2,9 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"time"
+
+	"github.com/ojrac/opensimplex-go"
 
 	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
@@ -358,7 +359,8 @@ func generateTriangles(index int, n [8]*math32.Vector3, v [8]float32, isosurface
 	for i := range edgeConnections {
 		if edges[index]&(1<<i) != 0 {
 			i0, i1 := edgeConnections[i][0], edgeConnections[i][1]
-			l[i] = n[i0].Clone().Lerp(n[i1], 0.5)
+			v0, v1 := isosurface(n[i0]), isosurface(n[i1])
+			l[i] = n[i0].Clone().Lerp(n[i1], (isolevel-v0)/(v1-v0))
 		}
 	}
 	var vertices []*math32.Vector3
@@ -380,7 +382,7 @@ func marchCube(origin *math32.Vector3, isosurface func(v *math32.Vector3) float3
 	}
 	index := 0
 	for i, value := range v {
-		if value < isolevel {
+		if value >= isolevel {
 			index |= (1 << i)
 		}
 	}
@@ -486,36 +488,43 @@ func removeNodeByName(node *core.Node, name string) {
 	}
 }
 
+func marchVoxels(voxels [][][]float32) []*math32.Vector3 {
+	return marchCubes(len(voxels), func(v *math32.Vector3) float32 {
+		x, y, z := int(v.X), int(v.Y), int(v.Z)
+		if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) {
+			return voxels[x][y][z]
+		}
+		return 0
+	}, 0.5)
+}
+
 func MarchingCubesDemo() {
 
 	a := app.App()
 	scene := core.NewNode()
 
-	voxels := make([][][]bool, 10)
-	for x := 0; x < 10; x++ {
-		voxels[x] = make([][]bool, 10)
-		for y := 0; y < 10; y++ {
-			voxels[x][y] = make([]bool, 10)
+	N, M, L := 16, 16, 16
+
+	noise := opensimplex.NewNormalized32(0)
+	voxels := make([][][]float32, N)
+	for x := 0; x < N; x++ {
+		voxels[x] = make([][]float32, M)
+		for y := 0; y < M; y++ {
+			voxels[x][y] = make([]float32, L)
 		}
 	}
-	for x := 0; x < 10; x++ {
-		for z := 0; z < 10; z++ {
-			for y := 0; y < 10; y++ {
-				if y < 2 || (voxels[x][y-1][z] && rand.Float32() < 0.2) {
-					voxels[x][y][z] = true
-				}
+	for x := 0; x < N; x++ {
+		for z := 0; z < L; z++ {
+			height := math32.Min(float32(M)-1, float32(M)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
+			for y := 0; height > 0; y++ {
+				voxels[x][y][z] = math32.Min(1, height)
+				height--
 			}
 		}
 	}
 
 	// Create a mesh and add it to the scene
-	vertices := marchCubes(len(voxels), func(v *math32.Vector3) float32 {
-		x, y, z := int(v.X), int(v.Y), int(v.Z)
-		if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) && voxels[x][y][z] {
-			return 1
-		}
-		return 0
-	}, 1)
+	vertices := marchVoxels(voxels)
 	mesh := NewMesh(vertices)
 	mesh.SetName("Mesh")
 	wireframe := NewWireframeMesh(vertices)
@@ -532,7 +541,7 @@ func MarchingCubesDemo() {
 	group.Add(wireframe)
 	group.Add(points)
 	group.Add(normals)
-	group.SetPosition(-5, 0, -5)
+	group.SetPosition(-float32(N)/2, 0, -float32(L)/2)
 	scene.Add(group)
 
 	log.Println("Lights")
@@ -624,26 +633,21 @@ func MarchingCubesDemo() {
 			intersects := caster.IntersectObject(mesh, false)
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
-				voxelX := int(math32.Floor(firstHit.Point.X)) + 5
-				voxelY := int(math32.Floor(firstHit.Point.Y))
-				voxelZ := int(math32.Floor(firstHit.Point.Z)) + 5
+				voxelX := int(math32.Round(firstHit.Point.X - group.Position().X))
+				voxelY := int(math32.Round(firstHit.Point.Y - group.Position().Y))
+				voxelZ := int(math32.Round(firstHit.Point.Z - group.Position().Z))
 				for ox := -1; ox <= 1; ox++ {
 					for oy := -1; oy <= 1; oy++ {
 						for oz := -1; oz <= 1; oz++ {
 							x, y, z := voxelX+ox, voxelY+oy, voxelZ+oz
-							if x >= 0 && x < 10 && y >= 0 && y < 10 && z >= 0 && z < 10 {
-								voxels[x][y][z] = true
+							if x >= 0 && x < N && y >= 0 && y < M && z >= 0 && z < L {
+								voxels[x][y][z] += 0.1
+								voxels[x][y][z] = math32.Min(voxels[x][y][z], 1)
 							}
 						}
 					}
 				}
-				vertices = marchCubes(len(voxels), func(v *math32.Vector3) float32 {
-					x, y, z := int(v.X), int(v.Y), int(v.Z)
-					if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) && voxels[x][y][z] {
-						return 1
-					}
-					return 0
-				}, 1)
+				vertices = marchVoxels(voxels)
 				geom := mesh.(*graphic.Mesh).GetGeometry()
 				geom.Init()
 				indices := indices(len(vertices))
