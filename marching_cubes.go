@@ -486,21 +486,21 @@ func removeNodeByName(node *core.Node, name string) {
 	}
 }
 
-func main() {
+func MarchingCubesDemo() {
 
 	a := app.App()
 	scene := core.NewNode()
 
-	voxels := make([][][]bool, 100)
-	for x := 0; x < 100; x++ {
-		voxels[x] = make([][]bool, 100)
-		for y := 0; y < 100; y++ {
-			voxels[x][y] = make([]bool, 100)
+	voxels := make([][][]bool, 10)
+	for x := 0; x < 10; x++ {
+		voxels[x] = make([][]bool, 10)
+		for y := 0; y < 10; y++ {
+			voxels[x][y] = make([]bool, 10)
 		}
 	}
-	for x := 0; x < 100; x++ {
-		for z := 0; z < 100; z++ {
-			for y := 0; y < 100; y++ {
+	for x := 0; x < 10; x++ {
+		for z := 0; z < 10; z++ {
+			for y := 0; y < 10; y++ {
 				if y < 2 || (voxels[x][y-1][z] && rand.Float32() < 0.2) {
 					voxels[x][y][z] = true
 				}
@@ -532,7 +532,7 @@ func main() {
 	group.Add(wireframe)
 	group.Add(points)
 	group.Add(normals)
-	group.SetPosition(-50, 0, -50)
+	group.SetPosition(-5, 0, -5)
 	scene.Add(group)
 
 	log.Println("Lights")
@@ -624,13 +624,17 @@ func main() {
 			intersects := caster.IntersectObject(mesh, false)
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
-				voxelX := int(math32.Floor(firstHit.Point.X)) + 50
+				voxelX := int(math32.Floor(firstHit.Point.X)) + 5
 				voxelY := int(math32.Floor(firstHit.Point.Y))
-				voxelZ := int(math32.Floor(firstHit.Point.Z)) + 50
-				for voxelY++; voxelY < 100; voxelY++ {
-					if voxels[voxelX][voxelY][voxelZ] == false {
-						voxels[voxelX][voxelY][voxelZ] = true
-						break
+				voxelZ := int(math32.Floor(firstHit.Point.Z)) + 5
+				for ox := -1; ox <= 1; ox++ {
+					for oy := -1; oy <= 1; oy++ {
+						for oz := -1; oz <= 1; oz++ {
+							x, y, z := voxelX+ox, voxelY+oy, voxelZ+oz
+							if x >= 0 && x < 10 && y >= 0 && y < 10 && z >= 0 && z < 10 {
+								voxels[x][y][z] = true
+							}
+						}
 					}
 				}
 				vertices = marchCubes(len(voxels), func(v *math32.Vector3) float32 {

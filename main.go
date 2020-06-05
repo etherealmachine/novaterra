@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"io/ioutil"
 	"math"
 	"path/filepath"
@@ -161,7 +163,20 @@ func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence
 	return value / maxamp
 }
 
+func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
+	pixels := gl.ReadPixels(x, y, 1, 1, gls.RGBA, gls.FLOAT)
+	var r, g, b, a float32
+	binary.Read(bytes.NewBuffer(pixels[0:4]), binary.LittleEndian, &r)
+	binary.Read(bytes.NewBuffer(pixels[4:8]), binary.LittleEndian, &g)
+	binary.Read(bytes.NewBuffer(pixels[8:12]), binary.LittleEndian, &b)
+	binary.Read(bytes.NewBuffer(pixels[12:16]), binary.LittleEndian, &a)
+	return &math32.Color4{R: r, G: g, B: b, A: a}
+}
+
 func main() {
+
+	//MarchingCubesDemo()
+	//return
 
 	// Create application and scene
 	a := app.App()
@@ -304,9 +319,9 @@ func main() {
 		}
 	})
 
-	mousePickFramebuffer := a.Gls().GenerateFramebuffer()
-	colorBuf := a.Gls().GenerateRenderbuffer()
-	depthBuf := a.Gls().GenerateRenderbuffer()
+	mousePickFramebuffer := a.Gls().GenFramebuffer()
+	colorBuf := a.Gls().GenRenderbuffer()
+	depthBuf := a.Gls().GenRenderbuffer()
 	a.Gls().BindFramebuffer(mousePickFramebuffer)
 	a.Gls().BindRenderbuffer(colorBuf)
 	a.Gls().RenderbufferStorage(gls.RGBA32F, width, height)
@@ -338,7 +353,7 @@ func main() {
 	a.Subscribe(window.OnWindowSize, onResize)
 	onResize("", nil)
 
-	computeFramebuffer := a.Gls().GenerateFramebuffer()
+	computeFramebuffer := a.Gls().GenBuffer()
 	computeScene := core.NewNode()
 	computeCam := camera.NewOrthographic(1.0, 0, 1.0, 2.0, camera.Vertical)
 	computeScene.Add(graphic.NewMesh(geometry.NewPlane(2, 2), terrain))
@@ -358,7 +373,7 @@ func main() {
 			panic(err)
 		}
 		a.Gls().ReadBuffer(gls.COLOR_ATTACHMENT0)
-		c := a.Gls().ReadPixels(int(mouseX), int(mouseY), 1, 1)[0][0]
+		c := readColorAt(a.Gls(), int(mouseX), height-int(mouseY))
 		if c.R == 0.5 && c.G == 0.5 && c.B == 0.5 {
 			return
 		}
