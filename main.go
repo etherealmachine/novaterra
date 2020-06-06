@@ -2,10 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 )
 
 var (
-	demo = flag.String("demo", "heightmap", "heightmap, marching_cubes, or transvoxel")
+	demo = flag.String("demo", "heightmap", "heightmap, voxels")
 )
 
 func main() {
@@ -13,9 +14,9 @@ func main() {
 	switch *demo {
 	case "heightmap":
 		heightmapTerrainDemo()
-	case "marching_cubes":
-		marchingCubesDemo()
-	case "transvoxel":
-		transvoxelDemo()
+	case "voxels":
+		voxelDemo()
+	default:
+		panic(fmt.Sprintf("Invalid demo %q", *demo))
 	}
 }

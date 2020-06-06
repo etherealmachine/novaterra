@@ -146,3 +146,28 @@ func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
 	binary.Read(bytes.NewBuffer(pixels[12:16]), binary.LittleEndian, &a)
 	return &math32.Color4{R: r, G: g, B: b, A: a}
 }
+
+func simplexTerrain(n, m, l int) [][][]int8 {
+	noise := opensimplex.NewNormalized32(0)
+	voxels := make([][][]int8, n+3)
+	for x := 0; x < n+3; x++ {
+		voxels[x] = make([][]int8, m+3)
+		for y := 0; y < m+3; y++ {
+			voxels[x][y] = make([]int8, l+3)
+		}
+	}
+	for x := 0; x < n+3; x++ {
+		for z := 0; z < l+3; z++ {
+			height := math32.Min(float32(m+3)-1, float32(m+3)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
+			for y := 0; height > 0; y++ {
+				if height >= 1 {
+					voxels[x][y][z] = -127
+				} else {
+					voxels[x][y][z] = -int8(height) * 127
+				}
+				height--
+			}
+		}
+	}
+	return voxels
+}
