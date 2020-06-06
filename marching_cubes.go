@@ -67,15 +67,12 @@ func marchVoxels(voxels [][][]int8) []*math32.Vector3 {
 	}, 0)
 }
 
-func marchingCubes(voxels [][][]int8) *core.Node {
+func marchingCubes(voxels [][][]int8) core.INode {
 	vertices := marchVoxels(voxels)
 	mesh := NewMesh(vertices)
-	mesh.SetName("Mesh")
 	group := core.NewNode()
 	group.Add(mesh)
-	bbMin := group.BoundingBox().Min
-	bbMax := group.BoundingBox().Max
-	bb := (&bbMax).Sub(&bbMin)
-	group.SetPosition(-bb.X/2+1.5, 0, -bb.Z/2+1.5)
+	group.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	group.SetName("Marching Cubes")
 	return group
 }
