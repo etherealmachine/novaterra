@@ -23,6 +23,18 @@ func flatten(l []*math32.Vector3) math32.ArrayF32 {
 	return a
 }
 
+func unflatten(a math32.ArrayF32) []*math32.Vector3 {
+	l := make([]*math32.Vector3, len(a)/3)
+	for i := 0; i < len(a); i += 3 {
+		l[i/3] = &math32.Vector3{
+			a[i],
+			a[i+1],
+			a[i+2],
+		}
+	}
+	return l
+}
+
 func indices(count int) math32.ArrayU32 {
 	l := make([]uint32, count)
 	for i := 0; i < count; i++ {
@@ -149,16 +161,16 @@ func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
 
 func simplexTerrain(n, m, l int) [][][]int8 {
 	noise := opensimplex.NewNormalized32(0)
-	voxels := make([][][]int8, n+3)
-	for x := 0; x < n+3; x++ {
-		voxels[x] = make([][]int8, m+3)
-		for y := 0; y < m+3; y++ {
-			voxels[x][y] = make([]int8, l+3)
+	voxels := make([][][]int8, n)
+	for x := 0; x < n; x++ {
+		voxels[x] = make([][]int8, m)
+		for y := 0; y < m; y++ {
+			voxels[x][y] = make([]int8, l)
 		}
 	}
-	for x := 0; x < n+3; x++ {
-		for z := 0; z < l+3; z++ {
-			height := math32.Min(float32(m+3)-1, float32(m+3)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
+	for x := 0; x < n; x++ {
+		for z := 0; z < l; z++ {
+			height := math32.Min(float32(m)-1, float32(m+3)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
 			for y := 0; height > 0; y++ {
 				if height >= 1 {
 					voxels[x][y][z] = -127

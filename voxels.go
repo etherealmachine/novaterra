@@ -99,7 +99,7 @@ func voxelDemo() {
 	scene := core.NewNode()
 	gui.Manager().Set(scene)
 
-	voxels := simplexTerrain(1, 1, 1)
+	voxels := simplexTerrain(16, 16, 16)
 
 	index := uint8(0)
 	group := core.NewNode()
