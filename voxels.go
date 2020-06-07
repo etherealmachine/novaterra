@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/g3n/engine/app"
@@ -19,9 +18,21 @@ import (
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/text"
-	"github.com/g3n/engine/texture"
 	"github.com/g3n/engine/window"
 )
+
+var font *text.Font
+
+func init() {
+	var err error
+	font, err = text.NewFont("fonts/arial.ttf")
+	if err != nil {
+		panic(err)
+	}
+	font.SetPointSize(14)
+	font.SetDPI(90)
+	font.SetFgColor(math32.NewColor4("White"))
+}
 
 type CubesChunk struct {
 	core.INode
@@ -65,6 +76,7 @@ func NewCubesChunk(voxels [][][]int8) *CubesChunk {
 		}
 	}
 	cubes.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	cubes.SetName("Cubes")
 	return &CubesChunk{
 		cubes, voxels, indices,
 		mat, material.NewStandard(math32.NewColor("Red")), material.NewStandard(math32.NewColor("Blue"))}
@@ -89,47 +101,12 @@ func (c *VoxelVizualizationChunk) HandleVoxelClick(x, y, z int, shift bool) {
 
 }
 
-func visualizeVoxels(voxels [][][]int8) *VoxelVizualizationChunk {
-	font, err := text.NewFont("fonts/arial.ttf")
-	if err != nil {
-		panic(err)
-	}
-	font.SetPointSize(14)
-	font.SetDPI(90)
-	font.SetFgColor(math32.NewColor4("White"))
-
-	wireframeMat := material.NewStandard(math32.NewColor("White"))
-	wireframeMat.SetWireframe(true)
-	wireframe := core.NewNode()
-	labels := core.NewNode()
-	for x := 0; x < len(voxels); x++ {
-		for y := 0; y < len(voxels[x]); y++ {
-			for z := 0; z < len(voxels[x][y]); z++ {
-				wire := graphic.NewMesh(geometry.NewCube(1), wireframeMat)
-				wire.SetPosition(float32(x)-0.5, float32(y)-0.5, float32(z)-0.5)
-				wireframe.Add(wire)
-
-				textImg := font.DrawText(fmt.Sprintf("%d", voxels[x][y][z]))
-				tex := texture.NewTexture2DFromRGBA(textImg)
-				textMat := material.NewStandard(math32.NewColor("White"))
-				textMat.AddTexture(tex)
-				textMat.SetTransparent(true)
-				label := graphic.NewSprite(float32(textImg.Bounds().Dx())/100, float32(textImg.Bounds().Dy())/100, textMat)
-				label.SetPosition(float32(x), float32(y), float32(z))
-				labels.Add(label)
-			}
-		}
-	}
-	wireframe.SetPosition(-float32(len(voxels))/2+1, 0, -float32(len(voxels[0][0]))/2+1)
-	labels.SetPosition(-float32(len(voxels))/2+1, 0, -float32(len(voxels[0][0]))/2+1)
-	group := core.NewNode()
-	group.Add(wireframe)
-	group.Add(labels)
-	return &VoxelVizualizationChunk{group}
-}
-
 type VoxelChunk interface {
 	HandleVoxelClick(x, y, z int, shift bool)
+}
+
+type Stepper interface {
+	Step(i uint8)
 }
 
 func voxelDemo() {
@@ -138,12 +115,12 @@ func voxelDemo() {
 	scene := core.NewNode()
 	gui.Manager().Set(scene)
 
-	voxels := simplexTerrain(32, 32, 32)
+	voxels := simplexTerrain(16, 16, 16)
 
 	index := uint8(0)
 	group := core.NewNode()
-	group.Add(transvoxelCase(index))
-	group.Add(marchingCubesCase(index))
+	group.Add(NewMarchingCubesCase())
+	group.Add(NewTransvoxelCase())
 	group.Add(NewCubesChunk(voxels))
 	group.Add(NewMarchingCubesChunk(voxels))
 	group.Add(NewTransvoxelChunk(voxels))
@@ -185,22 +162,30 @@ func voxelDemo() {
 	scene.Add(cam)
 
 	width, height := a.GetFramebufferSize()
+	scaleW, _ := a.GetScale()
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
 	cam.SetAspect(float32(width) / float32(height))
+
+	caseLabel := gui.NewLabel(group.ChildAt(0).Name())
+	caseLabel.SetFontSize(18)
+	caseLabel.SetColor(math32.NewColor("White"))
+	w, h := caseLabel.Size()
+	caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
+	scene.Add(caseLabel)
 
 	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
 		e := ev.(*window.KeyEvent)
 		if e.Key == window.KeySpace {
-			var target int
-			for i, c := range group.Children() {
-				if strings.HasPrefix(c.Name(), "Transvoxel Case") {
-					target = i
+			for _, c := range group.Children() {
+				if v, ok := c.(Stepper); c.Visible() && ok {
+					index++
+					v.Step(index)
+					caseLabel.SetText(c.Name())
+					w, h := caseLabel.Size()
+					caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
 					break
 				}
 			}
-			group.RemoveAt(target)
-			index++
-			group.AddAt(target, transvoxelCase(index))
 		}
 		if e.Key == window.KeyTab {
 			for i, c := range group.Children() {
@@ -209,8 +194,11 @@ func voxelDemo() {
 					if i+1 >= len(group.Children()) {
 						i = -1
 					}
-					group.Children()[i+1].SetVisible(true)
-					vertexCountLabel.SetText(fmt.Sprintf("Vertices: %d", countVertices(group.Children()[i+1])))
+					group.ChildAt(i + 1).SetVisible(true)
+					caseLabel.SetText(group.ChildAt(i + 1).Name())
+					w, h := caseLabel.Size()
+					caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
+					vertexCountLabel.SetText(fmt.Sprintf("Vertices: %d", countVertices(group.ChildAt(i+1))))
 					break
 				}
 			}

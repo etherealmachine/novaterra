@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/g3n/engine/core"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
+	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 )
 
@@ -70,42 +73,61 @@ func marchVoxels(voxels [][][]int8) []*math32.Vector3 {
 	}, 0)
 }
 
-func marchingCubesCase(i uint8) core.INode {
-	voxels := [][][]int8{
-		{{127, 127}, {127, 127}},
-		{{127, 127}, {127, 127}},
-	}
-	if i&1 != 0 {
-		voxels[0][0][0] = -127
-	}
-	if (i>>1)&1 != 0 {
-		voxels[1][0][0] = -127
-	}
-	if (i>>2)&1 != 0 {
-		voxels[0][0][1] = -127
-	}
-	if (i>>3)&1 != 0 {
-		voxels[1][0][1] = -127
-	}
-	if (i>>4)&1 != 0 {
-		voxels[0][1][0] = -127
-	}
-	if (i>>5)&1 != 0 {
-		voxels[1][1][0] = -127
-	}
-	if (i>>6)&1 != 0 {
-		voxels[0][1][1] = -127
-	}
-	if (i>>7)&1 != 0 {
-		voxels[1][1][1] = -127
-	}
+type MarchingCubesCase struct {
+	core.INode
+}
 
+func NewMarchingCubesCase() *MarchingCubesCase {
 	group := core.NewNode()
-	vertices := marchVoxels(voxels)
-	mesh := NewMesh(vertices)
-	group.Add(mesh)
-	group.Add(visualizeVoxels(voxels))
-	return group
+
+	cube := geometry.NewCube(1)
+	mat := material.NewStandard(math32.NewColor("White"))
+	mat.SetWireframe(true)
+	group.Add(graphic.NewMesh(cube, mat))
+
+	c := &MarchingCubesCase{group}
+	c.Step(0)
+	c.SetName("Marching Cubes Case 0")
+	return c
+}
+
+func (c *MarchingCubesCase) Step(i uint8) {
+	oldMesh := c.Children()[0].GetNode().FindPath("/Mesh")
+	if oldMesh != nil {
+		c.Children()[0].GetNode().Remove(oldMesh)
+	}
+	oldLabels := c.Children()[0].GetNode().FindPath("/Labels")
+	if oldLabels != nil {
+		c.Children()[0].GetNode().Remove(oldLabels)
+	}
+	voxels := voxelsAtStep(i)
+
+	labels := core.NewNode()
+	for x := 0; x < 2; x++ {
+		for y := 0; y < 2; y++ {
+			for z := 0; z < 2; z++ {
+				label := NewSpriteLabel(fmt.Sprintf("%d", voxels[x][y][z]))
+				label.SetPosition(float32(x)-0.5, float32(y)-0.5, float32(z)-0.5)
+				labels.Add(label)
+			}
+		}
+	}
+	labels.SetName("Labels")
+	c.Children()[0].GetNode().Add(labels)
+
+	positions, normals, indices := fromVertices(marchCube(&math32.Vector3{0, 0, 0}, func(v *math32.Vector3) float32 {
+		x, y, z := int(v.X), int(v.Y), int(v.Z)
+		if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[0]) && z >= 0 && z < len(voxels[0][0]) {
+			return float32(voxels[x][y][z])
+		}
+		return 0
+	}, 0))
+
+	mesh := NewDoubleSidedMesh(positions, normals, indices)
+	mesh.SetName("Mesh")
+	mesh.SetPosition(-0.5, -0.5, -0.5)
+	c.Children()[0].GetNode().Add(mesh)
+	c.SetName(fmt.Sprintf("Marching Cubes Case %d", i))
 }
 
 type MarchingCubesChunk struct {
@@ -149,5 +171,6 @@ func NewMarchingCubesChunk(voxels [][][]int8) *MarchingCubesChunk {
 	node := core.NewNode()
 	node.Add(mesh)
 	node.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	node.SetName("Marching Cubes")
 	return &MarchingCubesChunk{node, voxels}
 }

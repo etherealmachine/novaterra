@@ -2,10 +2,14 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/g3n/engine/core"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
+	"github.com/g3n/engine/material"
+	"github.com/g3n/engine/math32"
 )
 
 var cornerVertices = [8][3]float32{
@@ -115,7 +119,7 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 	}
 	for t := 0; t < triangleCount; t++ {
 		for i := 0; i < 3; i++ {
-			indices = append(indices, indexMap[cell.VertexIndex[t*3+i]])
+			indices = append(indices, indexMap[cell.VertexIndex[t*3+(2-i)]])
 		}
 	}
 	return positions, normals, indices
@@ -139,42 +143,54 @@ func marchTransvoxels(voxels [][][]int8) ([]float32, []float32, []uint32) {
 	return positions, normals, indices
 }
 
-func transvoxelCase(i uint8) core.INode {
-	voxels := [][][]int8{
-		{{127, 127}, {127, 127}},
-		{{127, 127}, {127, 127}},
-	}
-	if i&1 != 0 {
-		voxels[0][0][0] = -127
-	}
-	if (i>>1)&1 != 0 {
-		voxels[1][0][0] = -127
-	}
-	if (i>>2)&1 != 0 {
-		voxels[0][0][1] = -127
-	}
-	if (i>>3)&1 != 0 {
-		voxels[1][0][1] = -127
-	}
-	if (i>>4)&1 != 0 {
-		voxels[0][1][0] = -127
-	}
-	if (i>>5)&1 != 0 {
-		voxels[1][1][0] = -127
-	}
-	if (i>>6)&1 != 0 {
-		voxels[0][1][1] = -127
-	}
-	if (i>>7)&1 != 0 {
-		voxels[1][1][1] = -127
-	}
+type TransvoxelCase struct {
+	core.INode
+}
 
+func NewTransvoxelCase() *TransvoxelCase {
 	group := core.NewNode()
+
+	cube := geometry.NewCube(1)
+	mat := material.NewStandard(math32.NewColor("White"))
+	mat.SetWireframe(true)
+	group.Add(graphic.NewMesh(cube, mat))
+
+	c := &TransvoxelCase{group}
+	c.Step(0)
+	c.SetName("Transvoxel Case 0")
+	return c
+}
+
+func (c *TransvoxelCase) Step(i uint8) {
+	oldMesh := c.Children()[0].GetNode().FindPath("/Mesh")
+	if oldMesh != nil {
+		c.Children()[0].GetNode().Remove(oldMesh)
+	}
+	oldLabels := c.Children()[0].GetNode().FindPath("/Labels")
+	if oldLabels != nil {
+		c.Children()[0].GetNode().Remove(oldLabels)
+	}
+	voxels := voxelsAtStep(i)
+
+	labels := core.NewNode()
+	for x := 0; x < 2; x++ {
+		for y := 0; y < 2; y++ {
+			for z := 0; z < 2; z++ {
+				label := NewSpriteLabel(fmt.Sprintf("%d", voxels[x][y][z]))
+				label.SetPosition(float32(x)-0.5, float32(y)-0.5, float32(z)-0.5)
+				labels.Add(label)
+			}
+		}
+	}
+	labels.SetName("Labels")
+	c.Children()[0].GetNode().Add(labels)
+
 	positions, normals, indices := generateTransvoxelMesh(0, 0, 0, voxels, 0)
-	mesh := NewFastMesh(positions, normals, indices)
-	group.Add(mesh)
-	group.Add(visualizeVoxels(voxels))
-	return group
+	mesh := NewDoubleSidedMesh(positions, normals, indices)
+	mesh.SetName("Mesh")
+	mesh.SetPosition(-0.5, -0.5, -0.5)
+	c.Children()[0].GetNode().Add(mesh)
+	c.SetName(fmt.Sprintf("Transvoxel Case %d", i))
 }
 
 type TransvoxelChunk struct {
@@ -215,5 +231,6 @@ func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	group := core.NewNode()
 	group.Add(m)
 	group.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	group.SetName("Transvoxel")
 	return &TransvoxelChunk{group, voxels}
 }
