@@ -23,23 +23,16 @@ var cornerVertices = [8][3]float32{
 	{1, 1, 1},
 }
 
-func safeIndex(x, y, z int, voxels [][][]int8) int8 {
-	if x >= 0 && x < len(voxels) && y >= 0 && y < len(voxels[x]) && z >= 0 && z < len(voxels[x][y]) {
-		return voxels[x][y][z]
-	}
-	return 0
-}
-
 func corners(x, y, z int, voxels [][][]int8) [8]int8 {
 	return [8]int8{
-		safeIndex(x, y, z, voxels),
-		safeIndex(x+1, y, z, voxels),
-		safeIndex(x, y, z+1, voxels),
-		safeIndex(x+1, y, z+1, voxels),
-		safeIndex(x, y+1, z, voxels),
-		safeIndex(x+1, y+1, z, voxels),
-		safeIndex(x, y+1, z+1, voxels),
-		safeIndex(x+1, y+1, z+1, voxels),
+		voxels[x][y][z],
+		voxels[x+1][y][z],
+		voxels[x][y][z+1],
+		voxels[x+1][y][z+1],
+		voxels[x][y+1][z],
+		voxels[x+1][y+1][z],
+		voxels[x][y+1][z+1],
+		voxels[x+1][y+1][z+1],
 	}
 }
 
@@ -69,12 +62,14 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		for i := 0; i < 8; i++ {
 			p := cornerVertices[i]
 			ox, oy, oz := int(p[0]), int(p[1]), int(p[2])
-			nx := float32(safeIndex(x+ox+1, y+oy, z+oz, voxels)-safeIndex(x+ox-1, y+oy, z+oz, voxels)) * 0.5
-			ny := float32(safeIndex(x+ox, y+oy+1, z+oz, voxels)-safeIndex(x+ox, y+oy-1, z+oz, voxels)) * 0.5
-			nz := float32(safeIndex(x+ox, y+oy, z+oz+1, voxels)-safeIndex(x+ox, y+oy, z+oz-1, voxels)) * 0.5
-			cornerNormals[i][0] = nx
-			cornerNormals[i][1] = ny
-			cornerNormals[i][2] = nz
+			cx, cy, cz := x+ox, y+oy, z+oz
+			nx := (float32(voxels[cx+1][cy][cz]) - float32(voxels[cx-1][cy][cz])) * 0.5
+			ny := (float32(voxels[cx][cy+1][cz]) - float32(voxels[cx][cy-1][cz])) * 0.5
+			nz := (float32(voxels[cx][cy][cz+1]) - float32(voxels[cx][cy][cz-1])) * 0.5
+			norm := math32.Sqrt(nx*nx + ny*ny + nz*nz)
+			cornerNormals[i][0] = nx / norm
+			cornerNormals[i][1] = ny / norm
+			cornerNormals[i][2] = nz / norm
 		}
 
 		v0 := (vertexLocations[i] >> 4) & 0x0F // First Corner Index
@@ -82,24 +77,6 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		d0 := float32(c[v0])
 		d1 := float32(c[v1])
 		t := d1 / (d1 - d0)
-		/*
-			// TODO: Vertex Re-use
-			edge := vertexLocations[i] >> 8
-			reuseIndex := edge & 0xF               // Vertex id which should be created or reused 1, 2 or 3
-			rDir := edge >> 4                      // Direction to go to reach a previous cell for reusing
-			if byte(t)&0x00FF != 0 {
-				// Vertex lies in the interior of the edge
-			} else if t == 0 {
-				// Vertex lies at the higher numbered endpoint
-				if v1 == 7 {
-					// This cell owns the vertex
-				} else {
-					// Try to re-use corner vertex from a preceding cell
-				}
-			} else {
-				// Vertex lies at the lower-numbered endpoint. Try to reuse corner vertex from a preceding cell
-			}
-		*/
 		// Vertices at the two corners
 		p0 := cornerVertices[v0]
 		p1 := cornerVertices[v1]
@@ -109,9 +86,9 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		// Linearly interpolate along the 2 vertices to get the new vertex
 		qX, qY, qZ := p0[0]*t+(1-t)*p1[0], p0[1]*t+(1-t)*p1[1], p0[2]*t+(1-t)*p1[2]
 		indexMap[i] = maxIndex + uint32(len(positions)/3)
-		positions = append(positions, qX+float32(x))
-		positions = append(positions, qY+float32(y))
-		positions = append(positions, qZ+float32(z))
+		positions = append(positions, qX+float32(x)-1)
+		positions = append(positions, qY+float32(y)-1)
+		positions = append(positions, qZ+float32(z)-1)
 		nX, nY, nZ := n0[0]*t+(1-t)*n1[0], n0[1]*t+(1-t)*n1[1], n0[2]*t+(1-t)*n1[2]
 		normals = append(normals, nX+float32(x))
 		normals = append(normals, nY+float32(y))
@@ -130,9 +107,10 @@ func marchTransvoxels(voxels [][][]int8) ([]float32, []float32, []uint32) {
 	var normals []float32
 	var indices []uint32
 	n, m, l := len(voxels), len(voxels[0]), len(voxels[0][0])
-	for x := -1; x <= n; x++ {
-		for z := -1; z <= m; z++ {
-			for y := -1; y <= l; y++ {
+	voxels = inflate(voxels)
+	for x := 1; x <= n+1; x++ {
+		for z := 1; z <= m+1; z++ {
+			for y := 1; y <= l+1; y++ {
 				p, n, i := generateTransvoxelMesh(x, y, z, voxels, uint32(len(positions)/3))
 				positions = append(positions, p...)
 				normals = append(normals, n...)
@@ -185,7 +163,7 @@ func (c *TransvoxelCase) Step(i uint8) {
 	labels.SetName("Labels")
 	c.Children()[0].GetNode().Add(labels)
 
-	positions, normals, indices := generateTransvoxelMesh(0, 0, 0, voxels, 0)
+	positions, normals, indices := generateTransvoxelMesh(1, 1, 1, inflate(voxels), 0)
 	mesh := NewDoubleSidedMesh(positions, normals, indices)
 	mesh.SetName("Mesh")
 	mesh.SetPosition(-0.5, -0.5, -0.5)
@@ -226,7 +204,7 @@ func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
 }
 
 func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
-	positions, normals, indices := marchTransvoxels(voxels)
+	positions, normals, indices := marchTransvoxels(inflate(voxels))
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)

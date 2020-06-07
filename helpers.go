@@ -73,6 +73,35 @@ func reverseWinding(indices []uint32) []uint32 {
 	return reverse
 }
 
+func inflate(a [][][]int8) [][][]int8 {
+	n, m, l := len(a), len(a[0]), len(a[0][0])
+	e := make([][][]int8, n+3)
+	for x := 0; x < len(e); x++ {
+		e[x] = make([][]int8, m+3)
+		for y := 0; y < len(e[0]); y++ {
+			e[x][y] = make([]int8, l+3)
+		}
+	}
+	for x := 0; x <= n; x++ {
+		for y := 0; y <= m; y++ {
+			for z := 0; z <= l; z++ {
+				mx, my, mz := x, y, z
+				if mx >= n {
+					mx--
+				}
+				if my >= m {
+					my--
+				}
+				if mz >= l {
+					mz--
+				}
+				e[x+1][y+1][z+1] = a[mx][my][mz]
+			}
+		}
+	}
+	return e
+}
+
 func NewMesh(vertices []*math32.Vector3) *graphic.Mesh {
 	geom := geometry.NewGeometry()
 	positions, normals, indices := fromVertices(vertices)

@@ -115,7 +115,7 @@ func voxelDemo() {
 	scene := core.NewNode()
 	gui.Manager().Set(scene)
 
-	voxels := simplexTerrain(16, 16, 16)
+	voxels := simplexTerrain(2, 2, 2)
 
 	index := uint8(0)
 	group := core.NewNode()
@@ -147,10 +147,10 @@ func voxelDemo() {
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
 	scene.Add(ambientLight)
 	sphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), material.NewStandard(math32.NewColor("White")))
-	sphere.SetPosition(-40, 40, -40)
+	sphere.SetPosition(30, 60, -30)
 	scene.Add(sphere)
-	pointLight := light.NewPoint(math32.NewColor("White"), 1000.0)
-	pointLight.SetPosition(-40, 40, -40)
+	pointLight := light.NewPoint(math32.NewColor("White"), 10000.0)
+	pointLight.SetPosition(30, 60, -30)
 	scene.Add(pointLight)
 
 	log.Println("Camera")
