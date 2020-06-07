@@ -2,6 +2,9 @@ package main
 
 import (
 	"github.com/g3n/engine/core"
+	"github.com/g3n/engine/geometry"
+	"github.com/g3n/engine/gls"
+	"github.com/g3n/engine/graphic"
 	"github.com/g3n/engine/math32"
 )
 
@@ -67,12 +70,84 @@ func marchVoxels(voxels [][][]int8) []*math32.Vector3 {
 	}, 0)
 }
 
-func marchingCubes(voxels [][][]int8) core.INode {
+func marchingCubesCase(i uint8) core.INode {
+	voxels := [][][]int8{
+		{{127, 127}, {127, 127}},
+		{{127, 127}, {127, 127}},
+	}
+	if i&1 != 0 {
+		voxels[0][0][0] = -127
+	}
+	if (i>>1)&1 != 0 {
+		voxels[1][0][0] = -127
+	}
+	if (i>>2)&1 != 0 {
+		voxels[0][0][1] = -127
+	}
+	if (i>>3)&1 != 0 {
+		voxels[1][0][1] = -127
+	}
+	if (i>>4)&1 != 0 {
+		voxels[0][1][0] = -127
+	}
+	if (i>>5)&1 != 0 {
+		voxels[1][1][0] = -127
+	}
+	if (i>>6)&1 != 0 {
+		voxels[0][1][1] = -127
+	}
+	if (i>>7)&1 != 0 {
+		voxels[1][1][1] = -127
+	}
+
+	group := core.NewNode()
 	vertices := marchVoxels(voxels)
 	mesh := NewMesh(vertices)
-	group := core.NewNode()
 	group.Add(mesh)
-	group.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
-	group.SetName("Marching Cubes")
+	group.Add(visualizeVoxels(voxels))
 	return group
+}
+
+type MarchingCubesChunk struct {
+	core.INode
+
+	voxels [][][]int8
+}
+
+func (c *MarchingCubesChunk) HandleVoxelClick(x, y, z int, shift bool) {
+	n, m, l := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
+	for ox := -1; ox <= 1; ox++ {
+		for oy := -1; oy <= 1; oy++ {
+			for oz := -1; oz <= 1; oz++ {
+				cx, cy, cz := x+ox, y+oy, z+oz
+				if cx >= 0 && cx < n && cy >= 0 && cy < m && cz >= 0 && cz < l {
+					if shift && c.voxels[cx][cy][cz] < 0 {
+						c.voxels[cx][cy][cz]++
+					} else if !shift && c.voxels[cx][cy][cz] > -127 {
+						c.voxels[cx][cy][cz]--
+					}
+				}
+			}
+		}
+	}
+	vertices := marchVoxels(c.voxels)
+	geom := geometry.NewGeometry()
+	indices := indices(len(vertices))
+	positions := flatten(vertices)
+	normals := computeNormals(vertices)
+	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.SetIndices(indices)
+	mesh := c.Children()[0].(*graphic.Mesh)
+	mat := mesh.GetMaterial(0)
+	mesh.Init(geom, mat)
+}
+
+func NewMarchingCubesChunk(voxels [][][]int8) *MarchingCubesChunk {
+	vertices := marchVoxels(voxels)
+	mesh := NewMesh(vertices)
+	node := core.NewNode()
+	node.Add(mesh)
+	node.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	return &MarchingCubesChunk{node, voxels}
 }

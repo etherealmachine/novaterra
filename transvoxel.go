@@ -2,9 +2,10 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/g3n/engine/core"
+	"github.com/g3n/engine/geometry"
+	"github.com/g3n/engine/gls"
+	"github.com/g3n/engine/graphic"
 )
 
 var cornerVertices = [8][3]float32{
@@ -173,16 +174,46 @@ func transvoxelCase(i uint8) core.INode {
 	mesh := NewFastMesh(positions, normals, indices)
 	group.Add(mesh)
 	group.Add(visualizeVoxels(voxels))
-	group.SetName(fmt.Sprintf("Transvoxel Case %d", i))
 	return group
 }
 
-func transvoxelMesh(voxels [][][]int8) core.INode {
+type TransvoxelChunk struct {
+	core.INode
+
+	voxels [][][]int8
+}
+
+func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
+	n, m, l := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
+	for ox := -1; ox <= 1; ox++ {
+		for oy := -1; oy <= 1; oy++ {
+			for oz := -1; oz <= 1; oz++ {
+				cx, cy, cz := x+ox, y+oy, z+oz
+				if cx >= 0 && cx < n && cy >= 0 && cy < m && cz >= 0 && cz < l {
+					if shift && c.voxels[cx][cy][cz] < 0 {
+						c.voxels[cx][cy][cz]++
+					} else if !shift && c.voxels[cx][cy][cz] > -127 {
+						c.voxels[cx][cy][cz]--
+					}
+				}
+			}
+		}
+	}
+	positions, normals, indices := marchTransvoxels(c.voxels)
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.SetIndices(indices)
+	mesh := c.Children()[0].(*graphic.Mesh)
+	mat := mesh.GetMaterial(0)
+	mesh.Init(geom, mat)
+}
+
+func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	positions, normals, indices := marchTransvoxels(voxels)
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
 	group.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
-	group.SetName("Transvoxel Mesh")
-	return group
+	return &TransvoxelChunk{group, voxels}
 }

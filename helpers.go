@@ -57,7 +57,7 @@ func computeNormals(vertices []*math32.Vector3) math32.ArrayF32 {
 	return normals
 }
 
-func NewMesh(vertices []*math32.Vector3) graphic.IGraphic {
+func NewMesh(vertices []*math32.Vector3) *graphic.Mesh {
 	geom := geometry.NewGeometry()
 	indices := indices(len(vertices))
 	positions := flatten(vertices)
@@ -70,7 +70,7 @@ func NewMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewMesh(geom, mat)
 }
 
-func NewFastMesh(positions []float32, normals []float32, indices []uint32) graphic.IGraphic {
+func NewFastMesh(positions []float32, normals []float32, indices []uint32) *graphic.Mesh {
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
@@ -80,7 +80,7 @@ func NewFastMesh(positions []float32, normals []float32, indices []uint32) graph
 	return graphic.NewMesh(geom, mat)
 }
 
-func NewWireframeMesh(vertices []*math32.Vector3) graphic.IGraphic {
+func NewWireframeMesh(vertices []*math32.Vector3) *graphic.Mesh {
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
 	mat := material.NewStandard(math32.NewColor("White"))
@@ -88,7 +88,7 @@ func NewWireframeMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewMesh(geom, mat)
 }
 
-func NewPointsMesh(vertices []*math32.Vector3) graphic.IGraphic {
+func NewPointsMesh(vertices []*math32.Vector3) *graphic.Points {
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(flatten(vertices)).AddAttrib(gls.VertexPosition))
 	mat := material.NewPoint(math32.NewColor("White"))
@@ -96,7 +96,7 @@ func NewPointsMesh(vertices []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewPoints(geom, mat)
 }
 
-func NewLinesMesh(points []*math32.Vector3) graphic.IGraphic {
+func NewLinesMesh(points []*math32.Vector3) *graphic.Lines {
 	lines := make([]float32, len(points)*3)
 	for i := 0; i < len(points)/2; i++ {
 		from := points[i*2]
@@ -114,7 +114,7 @@ func NewLinesMesh(points []*math32.Vector3) graphic.IGraphic {
 	return graphic.NewLines(geom, mat)
 }
 
-func NewNormalsMesh(vertices []*math32.Vector3) graphic.IGraphic {
+func NewNormalsMesh(vertices []*math32.Vector3) *graphic.Lines {
 	lines := make([]float32, len(vertices)*2)
 	for i := 0; i < len(vertices)/3; i++ {
 		t := math32.NewTriangle(vertices[i*3], vertices[i*3+1], vertices[i*3+2])
@@ -171,12 +171,11 @@ func simplexTerrain(n, m, l int) [][][]int8 {
 	for x := 0; x < n; x++ {
 		for z := 0; z < l; z++ {
 			height := math32.Min(float32(m)-1, float32(m+3)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
+			deltaD := int8(math32.Floor(127 / height))
+			density := int8(-127)
 			for y := 0; height > 0; y++ {
-				if height >= 1 {
-					voxels[x][y][z] = -127
-				} else {
-					voxels[x][y][z] = -int8(height) * 127
-				}
+				voxels[x][y][z] = density
+				density += deltaD
 				height--
 			}
 		}
