@@ -75,11 +75,11 @@ func reverseWinding(indices []uint32) []uint32 {
 
 func inflate(a [][][]int8) [][][]int8 {
 	n, m, l := len(a), len(a[0]), len(a[0][0])
-	e := make([][][]int8, n+2)
+	e := make([][][]int8, n+3)
 	for x := 0; x < len(e); x++ {
-		e[x] = make([][]int8, m+2)
+		e[x] = make([][]int8, m+3)
 		for y := 0; y < len(e[0]); y++ {
-			e[x][y] = make([]int8, l+2)
+			e[x][y] = make([]int8, l+3)
 		}
 	}
 	for x := 0; x < n; x++ {

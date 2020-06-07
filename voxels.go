@@ -78,7 +78,7 @@ func NewCubesChunk(voxels [][][]int8) *CubesChunk {
 			}
 		}
 	}
-	cubes.SetPosition(-float32(len(voxels))/2+0.5, 0, -float32(len(voxels[0][0]))/2+0.5)
+	cubes.SetPosition(-float32(len(voxels))/2+1, -float32(len(voxels[0]))/2+1, -float32(len(voxels[0][0]))/2+1)
 	cubes.SetName("Cubes")
 	return &CubesChunk{
 		cubes, voxels, indices,
@@ -97,7 +97,7 @@ func NewVoxelLabels(voxels [][][]int8) *core.Node {
 		}
 	}
 	labels.SetName("Labels")
-	labels.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	labels.SetPosition(-float32(len(voxels))/2+1, -float32(len(voxels[0]))/2+1, -float32(len(voxels[0][0]))/2+1)
 	return labels
 }
 
@@ -136,8 +136,11 @@ func voxelDemo() {
 
 	voxels := simplexTerrain(16, 16, 16)
 
+	voxels[7][7][7] = -127
+
 	index := uint8(0)
 	group := core.NewNode()
+	group.Add(NewVoxelLabels(voxels))
 	group.Add(NewMarchingCubesCase())
 	group.Add(NewTransvoxelCase())
 	group.Add(NewCubesChunk(voxels))
@@ -149,8 +152,6 @@ func voxelDemo() {
 		}
 	}
 	scene.Add(group)
-
-	scene.Add(NewVoxelLabels(inflate(voxels)))
 
 	fpsLabel := gui.NewLabel("FPS:")
 	fpsLabel.SetPosition(10, 10)
@@ -303,14 +304,18 @@ func voxelDemo() {
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
 				pos := curr.Position()
-				log.Println(firstHit.Point.X, pos.X)
-				log.Println(firstHit.Point.Y, pos.Y)
-				log.Println(firstHit.Point.Z, pos.Z)
-				/*
-					if c, ok := curr.(VoxelChunk); ok {
-						c.HandleVoxelClick(voxelX, voxelY, voxelZ, shift)
+				vx := int(math32.Floor(firstHit.Point.X - pos.X + 0.49))
+				vy := int(math32.Floor(firstHit.Point.Y - pos.Y + 0.49))
+				vz := int(math32.Floor(firstHit.Point.Z - pos.Z + 0.49))
+				if c, ok := curr.(VoxelChunk); ok {
+					c.HandleVoxelClick(vx, vy, vz, shift)
+					for _, c := range group.Children() {
+						if c.Visible() {
+							vertexCountLabel.SetText(fmt.Sprintf("Vertices: %d", countVertices(c)))
+							break
+						}
 					}
-				*/
+				}
 			}
 		}
 

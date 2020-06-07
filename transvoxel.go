@@ -111,9 +111,9 @@ func marchTransvoxels(voxels [][][]int8) ([]float32, []float32, []uint32) {
 	var indices []uint32
 	n, m, l := len(voxels), len(voxels[0]), len(voxels[0][0])
 	voxels = inflate(voxels)
-	for x := 1; x < n+1; x++ {
-		for z := 1; z < m+1; z++ {
-			for y := 1; y < l+1; y++ {
+	for x := 1; x < n; x++ {
+		for z := 1; z < m; z++ {
+			for y := 1; y < l; y++ {
 				p, n, i := generateTransvoxelMesh(x, y, z, voxels, uint32(len(positions)/3))
 				positions = append(positions, p...)
 				normals = append(normals, n...)
@@ -211,7 +211,7 @@ func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
-	group.SetPosition(-float32(len(voxels))/2-1.5, -2, -float32(len(voxels[0][0]))/2-1.5)
+	group.SetPosition(-float32(len(voxels))/2-1, -float32(len(voxels[0]))/2-1, -float32(len(voxels[0][0]))/2-1)
 	group.SetName("Transvoxel")
 	return &TransvoxelChunk{group, voxels}
 }
