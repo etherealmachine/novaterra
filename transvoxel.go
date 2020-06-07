@@ -67,6 +67,9 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 			ny := (float32(voxels[cx][cy+1][cz]) - float32(voxels[cx][cy-1][cz])) * 0.5
 			nz := (float32(voxels[cx][cy][cz+1]) - float32(voxels[cx][cy][cz-1])) * 0.5
 			norm := math32.Sqrt(nx*nx + ny*ny + nz*nz)
+			if norm == 0 {
+				norm = 1
+			}
 			cornerNormals[i][0] = nx / norm
 			cornerNormals[i][1] = ny / norm
 			cornerNormals[i][2] = nz / norm
@@ -86,9 +89,9 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		// Linearly interpolate along the 2 vertices to get the new vertex
 		qX, qY, qZ := p0[0]*t+(1-t)*p1[0], p0[1]*t+(1-t)*p1[1], p0[2]*t+(1-t)*p1[2]
 		indexMap[i] = maxIndex + uint32(len(positions)/3)
-		positions = append(positions, qX+float32(x)-1)
-		positions = append(positions, qY+float32(y)-1)
-		positions = append(positions, qZ+float32(z)-1)
+		positions = append(positions, qX+float32(x))
+		positions = append(positions, qY+float32(y))
+		positions = append(positions, qZ+float32(z))
 		nX, nY, nZ := n0[0]*t+(1-t)*n1[0], n0[1]*t+(1-t)*n1[1], n0[2]*t+(1-t)*n1[2]
 		normals = append(normals, nX+float32(x))
 		normals = append(normals, nY+float32(y))
@@ -108,9 +111,9 @@ func marchTransvoxels(voxels [][][]int8) ([]float32, []float32, []uint32) {
 	var indices []uint32
 	n, m, l := len(voxels), len(voxels[0]), len(voxels[0][0])
 	voxels = inflate(voxels)
-	for x := 1; x <= n+1; x++ {
-		for z := 1; z <= m+1; z++ {
-			for y := 1; y <= l+1; y++ {
+	for x := 1; x < n+1; x++ {
+		for z := 1; z < m+1; z++ {
+			for y := 1; y < l+1; y++ {
 				p, n, i := generateTransvoxelMesh(x, y, z, voxels, uint32(len(positions)/3))
 				positions = append(positions, p...)
 				normals = append(normals, n...)
@@ -208,7 +211,7 @@ func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
-	group.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	group.SetPosition(-float32(len(voxels))/2-1.5, -2, -float32(len(voxels[0][0]))/2-1.5)
 	group.SetName("Transvoxel")
 	return &TransvoxelChunk{group, voxels}
 }

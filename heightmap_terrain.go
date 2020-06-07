@@ -82,7 +82,7 @@ func NewHeightmapTerrainMaterial(resolution int) *HeightmapTerrainMaterial {
 	var zeros []float32
 	for y := 0; y < m.Resolution; y++ {
 		for x := 0; x < m.Resolution; x++ {
-			height := math32.Max(0, 30*octaveNoise(noise, 16, float32(x), float32(y), .5, 0.007)-10)
+			height := math32.Max(0, 30*octaveNoise(noise, 16, float32(x), float32(y), 0, .5, 0.007)-10)
 			heightmap = append(heightmap, height)
 			heightmap = append(heightmap, 0)
 			heightmap = append(heightmap, 0)

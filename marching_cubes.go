@@ -170,7 +170,7 @@ func NewMarchingCubesChunk(voxels [][][]int8) *MarchingCubesChunk {
 	mesh := NewMesh(vertices)
 	node := core.NewNode()
 	node.Add(mesh)
-	node.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	node.SetPosition(-float32(len(voxels))/2+0.5, 0, -float32(len(voxels[0][0]))/2+0.5)
 	node.SetName("Marching Cubes")
 	return &MarchingCubesChunk{node, voxels}
 }

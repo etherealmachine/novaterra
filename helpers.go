@@ -75,26 +75,17 @@ func reverseWinding(indices []uint32) []uint32 {
 
 func inflate(a [][][]int8) [][][]int8 {
 	n, m, l := len(a), len(a[0]), len(a[0][0])
-	e := make([][][]int8, n+3)
+	e := make([][][]int8, n+2)
 	for x := 0; x < len(e); x++ {
-		e[x] = make([][]int8, m+3)
+		e[x] = make([][]int8, m+2)
 		for y := 0; y < len(e[0]); y++ {
-			e[x][y] = make([]int8, l+3)
+			e[x][y] = make([]int8, l+2)
 		}
 	}
-	for x := 0; x <= n; x++ {
-		for y := 0; y <= m; y++ {
-			for z := 0; z <= l; z++ {
+	for x := 0; x < n; x++ {
+		for y := 0; y < m; y++ {
+			for z := 0; z < l; z++ {
 				mx, my, mz := x, y, z
-				if mx >= n {
-					mx--
-				}
-				if my >= m {
-					my--
-				}
-				if mz >= l {
-					mz--
-				}
 				e[x+1][y+1][z+1] = a[mx][my][mz]
 			}
 		}
@@ -203,14 +194,14 @@ func NewSpriteLabel(txt string) *graphic.Sprite {
 	return label
 }
 
-func octaveNoise(noise opensimplex.Noise32, iters int, x, y float32, persistence, scale float32) float32 {
+func octaveNoise(noise opensimplex.Noise32, iters int, x, y, z float32, persistence, scale float32) float32 {
 	var maxamp float32 = 0
 	var amp float32 = 1
 	freq := scale
 	var value float32 = 0
 
 	for i := 0; i < iters; i++ {
-		value += noise.Eval2(x*freq, y*freq) * amp
+		value += noise.Eval3(x*freq, y*freq, z*freq) * amp
 		maxamp += amp
 		amp *= persistence
 		freq *= 2
@@ -239,14 +230,9 @@ func simplexTerrain(n, m, l int) [][][]int8 {
 		}
 	}
 	for x := 0; x < n; x++ {
-		for z := 0; z < l; z++ {
-			height := math32.Min(float32(m)-1, float32(m+3)*octaveNoise(noise, 16, float32(x), float32(z), .5, 0.07)+1)
-			deltaD := int8(math32.Floor(127 / height))
-			density := int8(-127)
-			for y := 0; height > 0; y++ {
-				voxels[x][y][z] = density
-				density += deltaD
-				height--
+		for y := 0; y < m; y++ {
+			for z := 0; z < l; z++ {
+				voxels[x][y][z] = int8(256*octaveNoise(noise, 16, float32(x), float32(y), float32(z), .5, 0.07) - 127)
 			}
 		}
 	}

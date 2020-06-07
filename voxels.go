@@ -75,11 +75,27 @@ func NewCubesChunk(voxels [][][]int8) *CubesChunk {
 			}
 		}
 	}
-	cubes.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	cubes.SetPosition(-float32(len(voxels))/2+0.5, 0, -float32(len(voxels[0][0]))/2+0.5)
 	cubes.SetName("Cubes")
 	return &CubesChunk{
 		cubes, voxels, indices,
 		mat, material.NewStandard(math32.NewColor("Red")), material.NewStandard(math32.NewColor("Blue"))}
+}
+
+func NewVoxelLabels(voxels [][][]int8) *core.Node {
+	labels := core.NewNode()
+	for x := 0; x < len(voxels); x++ {
+		for y := 0; y < len(voxels[x]); y++ {
+			for z := 0; z < len(voxels[x][y]); z++ {
+				label := NewSpriteLabel(fmt.Sprintf("%d", voxels[x][y][z]))
+				label.SetPosition(float32(x), float32(y), float32(z))
+				labels.Add(label)
+			}
+		}
+	}
+	labels.SetName("Labels")
+	labels.SetPosition(-float32(len(voxels))/2+0.5, -1, -float32(len(voxels[0][0]))/2+0.5)
+	return labels
 }
 
 func countVertices(n core.INode) int {
@@ -115,7 +131,7 @@ func voxelDemo() {
 	scene := core.NewNode()
 	gui.Manager().Set(scene)
 
-	voxels := simplexTerrain(2, 2, 2)
+	voxels := simplexTerrain(16, 16, 16)
 
 	index := uint8(0)
 	group := core.NewNode()
@@ -130,6 +146,8 @@ func voxelDemo() {
 		}
 	}
 	scene.Add(group)
+
+	scene.Add(NewVoxelLabels(inflate(voxels)))
 
 	fpsLabel := gui.NewLabel("FPS:")
 	fpsLabel.SetPosition(10, 10)
@@ -282,9 +300,10 @@ func voxelDemo() {
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
 				pos := curr.Position()
-				voxelX := int(math32.Round(firstHit.Point.X - pos.X))
-				voxelY := int(math32.Round(firstHit.Point.Y - pos.Y))
-				voxelZ := int(math32.Round(firstHit.Point.Z - pos.Z))
+				voxelX := int(firstHit.Point.X - pos.X)
+				voxelY := int(firstHit.Point.Y - pos.Y)
+				voxelZ := int(firstHit.Point.Z - pos.Z)
+				log.Println(voxelX, voxelY, voxelZ)
 				if c, ok := curr.(VoxelChunk); ok {
 					c.HandleVoxelClick(voxelX, voxelY, voxelZ, shift)
 				}
