@@ -58,7 +58,7 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 	vertexCount := cell.GetVertexCount()
 	triangleCount := cell.GetTriangleCount()
 	for i := 0; i < vertexCount; i++ {
-		var cornerNormals [8][3]float32
+		var cornerGradient [8][3]float32
 		for i := 0; i < 8; i++ {
 			p := cornerVertices[i]
 			ox, oy, oz := int(p[0]), int(p[1]), int(p[2])
@@ -66,13 +66,9 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 			nx := (float32(voxels[cx+1][cy][cz]) - float32(voxels[cx-1][cy][cz])) * 0.5
 			ny := (float32(voxels[cx][cy+1][cz]) - float32(voxels[cx][cy-1][cz])) * 0.5
 			nz := (float32(voxels[cx][cy][cz+1]) - float32(voxels[cx][cy][cz-1])) * 0.5
-			norm := math32.Sqrt(nx*nx + ny*ny + nz*nz)
-			if norm == 0 {
-				norm = 1
-			}
-			cornerNormals[i][0] = nx / norm
-			cornerNormals[i][1] = ny / norm
-			cornerNormals[i][2] = nz / norm
+			cornerGradient[i][0] = nx
+			cornerGradient[i][1] = ny
+			cornerGradient[i][2] = nz
 		}
 
 		v0 := (vertexLocations[i] >> 4) & 0x0F // First Corner Index
@@ -84,8 +80,8 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		p0 := cornerVertices[v0]
 		p1 := cornerVertices[v1]
 		// Normals at the two corners
-		n0 := cornerNormals[v0]
-		n1 := cornerNormals[v1]
+		n0 := cornerGradient[v0]
+		n1 := cornerGradient[v1]
 		// Linearly interpolate along the 2 vertices to get the new vertex
 		qX, qY, qZ := p0[0]*t+(1-t)*p1[0], p0[1]*t+(1-t)*p1[1], p0[2]*t+(1-t)*p1[2]
 		indexMap[i] = maxIndex + uint32(len(positions)/3)
@@ -93,9 +89,13 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		positions = append(positions, qY+float32(y))
 		positions = append(positions, qZ+float32(z))
 		nX, nY, nZ := n0[0]*t+(1-t)*n1[0], n0[1]*t+(1-t)*n1[1], n0[2]*t+(1-t)*n1[2]
-		normals = append(normals, nX+float32(x))
-		normals = append(normals, nY+float32(y))
-		normals = append(normals, nZ+float32(z))
+		norm := math32.Sqrt(nX*nX + nY*nY + nZ*nZ)
+		if norm == 0 {
+			norm = 1
+		}
+		normals = append(normals, nX/norm)
+		normals = append(normals, nY/norm)
+		normals = append(normals, nZ/norm)
 	}
 	for t := 0; t < triangleCount; t++ {
 		for i := 0; i < 3; i++ {

@@ -147,39 +147,9 @@ func NewPointsMesh(vertices []*math32.Vector3) *graphic.Points {
 	return graphic.NewPoints(geom, mat)
 }
 
-func NewLinesMesh(points []*math32.Vector3) *graphic.Lines {
-	lines := make([]float32, len(points)*3)
-	for i := 0; i < len(points)/2; i++ {
-		from := points[i*2]
-		to := points[i*2+1]
-		lines[i*6] = from.X
-		lines[i*6+1] = from.Y
-		lines[i*6+2] = from.Z
-		lines[i*6+3] = to.X
-		lines[i*6+4] = to.Y
-		lines[i*6+5] = to.Z
-	}
+func NewLinesMesh(lines []float32) *graphic.Lines {
 	geom := geometry.NewGeometry()
-	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
-	mat := material.NewStandard(math32.NewColor("Red"))
-	return graphic.NewLines(geom, mat)
-}
-
-func NewNormalsMesh(vertices []*math32.Vector3) *graphic.Lines {
-	lines := make([]float32, len(vertices)*2)
-	for i := 0; i < len(vertices)/3; i++ {
-		t := math32.NewTriangle(vertices[i*3], vertices[i*3+1], vertices[i*3+2])
-		c := vertices[i*3].Clone().Add(vertices[i*3+1].Clone()).Add(vertices[i*3+2].Clone()).MultiplyScalar(1.0 / 3.0)
-		n := c.Clone().Add(t.Normal(nil))
-		lines[i*6] = c.X
-		lines[i*6+1] = c.Y
-		lines[i*6+2] = c.Z
-		lines[i*6+3] = n.X
-		lines[i*6+4] = n.Y
-		lines[i*6+5] = n.Z
-	}
-	geom := geometry.NewGeometry()
-	geom.AddVBO(gls.NewVBO(math32.ArrayF32(lines)).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(lines).AddAttrib(gls.VertexPosition))
 	mat := material.NewStandard(math32.NewColor("Red"))
 	return graphic.NewLines(geom, mat)
 }
