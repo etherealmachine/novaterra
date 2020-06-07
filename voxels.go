@@ -48,6 +48,9 @@ func (c *CubesChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	for _, child := range c.Children() {
 		child.(*graphic.Mesh).SetMaterial(c.defaultMaterial)
 	}
+	if c.voxels[x][y][z] >= 0 {
+		return
+	}
 	m, l := len(c.voxels[0]), len(c.voxels[0][0])
 	cubeMesh := c.Children()[c.indices[x+y*m+z*m*l]].(*graphic.Mesh)
 	if shift {
@@ -300,13 +303,14 @@ func voxelDemo() {
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
 				pos := curr.Position()
-				voxelX := int(firstHit.Point.X - pos.X)
-				voxelY := int(firstHit.Point.Y - pos.Y)
-				voxelZ := int(firstHit.Point.Z - pos.Z)
-				log.Println(voxelX, voxelY, voxelZ)
-				if c, ok := curr.(VoxelChunk); ok {
-					c.HandleVoxelClick(voxelX, voxelY, voxelZ, shift)
-				}
+				log.Println(firstHit.Point.X, pos.X)
+				log.Println(firstHit.Point.Y, pos.Y)
+				log.Println(firstHit.Point.Z, pos.Z)
+				/*
+					if c, ok := curr.(VoxelChunk); ok {
+						c.HandleVoxelClick(voxelX, voxelY, voxelZ, shift)
+					}
+				*/
 			}
 		}
 
