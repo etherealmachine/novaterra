@@ -196,7 +196,7 @@ func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
 			}
 		}
 	}
-	positions, normals, indices := marchTransvoxels(c.voxels)
+	positions, normals, indices := marchTransvoxels(inflate(c.voxels))
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))

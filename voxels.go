@@ -304,9 +304,9 @@ func voxelDemo() {
 			if len(intersects) > 0 {
 				firstHit := intersects[0]
 				pos := curr.Position()
-				vx := int(math32.Floor(firstHit.Point.X - pos.X + 0.49))
-				vy := int(math32.Floor(firstHit.Point.Y - pos.Y + 0.49))
-				vz := int(math32.Floor(firstHit.Point.Z - pos.Z + 0.49))
+				vx := int(math32.Clamp(firstHit.Point.X-pos.X+0.5+0.5*caster.Direction().X, 0, float32(len(voxels)-1)))
+				vy := int(math32.Clamp(firstHit.Point.Y-pos.Y+0.5+0.5*caster.Direction().Y, 0, float32(len(voxels[0])-1)))
+				vz := int(math32.Clamp(firstHit.Point.Z-pos.Z+0.5+0.5*caster.Direction().Z, 0, float32(len(voxels[0][0])-1)))
 				if c, ok := curr.(VoxelChunk); ok {
 					c.HandleVoxelClick(vx, vy, vz, shift)
 					for _, c := range group.Children() {
