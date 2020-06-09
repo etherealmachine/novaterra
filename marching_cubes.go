@@ -106,7 +106,7 @@ func NewMarchingCubesCase() *MarchingCubesCase {
 }
 
 func (c *MarchingCubesCase) Step(i int) int {
-	c.index++
+	c.index += i
 	if c.index > 255 {
 		c.index = 255
 	}
@@ -141,7 +141,7 @@ func (c *MarchingCubesCase) Step(i int) int {
 	c.mesh = NewDoubleSidedMesh(positions, normals, indices)
 	c.mesh.SetPosition(-0.5, -0.5, -0.5)
 	c.Node.Add(c.mesh)
-	c.label.SetText(fmt.Sprintf("Marching Cubes Case %d", i))
+	c.label.SetText(fmt.Sprintf("Marching Cubes Case %d", c.index))
 
 	return int(c.index)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
+	"github.com/g3n/engine/gui"
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 )
@@ -125,7 +126,11 @@ func marchTransvoxels(voxels [][][]int8) ([]float32, []float32, []uint32) {
 }
 
 type TransvoxelCase struct {
-	core.INode
+	*core.Node
+	index  int
+	label  *gui.Label
+	labels *core.Node
+	mesh   *core.Node
 }
 
 func NewTransvoxelCase() *TransvoxelCase {
@@ -136,42 +141,52 @@ func NewTransvoxelCase() *TransvoxelCase {
 	mat.SetWireframe(true)
 	group.Add(graphic.NewMesh(cube, mat))
 
-	c := &TransvoxelCase{group}
+	label := gui.NewLabel("Transvoxel Case 0")
+	label.SetFontSize(18)
+	label.SetColor(math32.NewColor("White"))
+	w, h := label.Size()
+	width, _ := a.GetFramebufferSize()
+	scaleW, _ := a.GetScale()
+	label.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
+	group.Add(label)
+
+	c := &TransvoxelCase{group, 0, label, nil, nil}
 	c.Step(0)
-	c.SetName("Transvoxel Case 0")
 	return c
 }
 
-func (c *TransvoxelCase) Step(i uint8) {
-	oldMesh := c.Children()[0].GetNode().FindPath("/Mesh")
-	if oldMesh != nil {
-		c.Children()[0].GetNode().Remove(oldMesh)
+func (c *TransvoxelCase) Step(i int) int {
+	c.index += i
+	if c.index > 255 {
+		c.index = 255
 	}
-	oldLabels := c.Children()[0].GetNode().FindPath("/Labels")
-	if oldLabels != nil {
-		c.Children()[0].GetNode().Remove(oldLabels)
+	if c.index < 0 {
+		c.index = 0
 	}
-	voxels := voxelsAtStep(i)
 
-	labels := core.NewNode()
+	voxels := voxelsAtStep(uint8(c.index))
+
+	c.Node.Remove(c.labels)
+	c.labels = core.NewNode()
 	for x := 0; x < 2; x++ {
 		for y := 0; y < 2; y++ {
 			for z := 0; z < 2; z++ {
 				label := NewSpriteLabel(fmt.Sprintf("%d", voxels[x][y][z]))
 				label.SetPosition(float32(x)-0.5, float32(y)-0.5, float32(z)-0.5)
-				labels.Add(label)
+				c.labels.Add(label)
 			}
 		}
 	}
-	labels.SetName("Labels")
-	c.Children()[0].GetNode().Add(labels)
+	c.Node.Add(c.labels)
 
+	c.Node.Remove(c.mesh)
 	positions, normals, indices := generateTransvoxelMesh(1, 1, 1, inflate(voxels), 0)
-	mesh := NewDoubleSidedMesh(positions, normals, indices)
-	mesh.SetName("Mesh")
-	mesh.SetPosition(-0.5, -0.5, -0.5)
-	c.Children()[0].GetNode().Add(mesh)
-	c.SetName(fmt.Sprintf("Transvoxel Case %d", i))
+	c.mesh = NewDoubleSidedMesh(positions, normals, indices)
+	c.mesh.SetPosition(-1.5, -1.5, -1.5)
+	c.Node.Add(c.mesh)
+	c.label.SetText(fmt.Sprintf("Transvoxel Case %d", c.index))
+
+	return c.index
 }
 
 type TransvoxelChunk struct {
