@@ -21,7 +21,10 @@ import (
 	"github.com/g3n/engine/window"
 )
 
-var font *text.Font
+var (
+	a    *app.Application
+	font *text.Font
+)
 
 func init() {
 	var err error
@@ -125,12 +128,12 @@ type VoxelChunk interface {
 }
 
 type Stepper interface {
-	Step(i uint8)
+	Step(s int) int
 }
 
 func voxelDemo() {
 
-	a := app.App()
+	a = app.App()
 	scene := core.NewNode()
 	gui.Manager().Set(scene)
 
@@ -138,7 +141,6 @@ func voxelDemo() {
 
 	voxels[7][7][7] = -127
 
-	index := uint8(0)
 	group := core.NewNode()
 	group.Add(NewVoxelLabels(voxels))
 	group.Add(NewMarchingCubesCase())
@@ -184,27 +186,19 @@ func voxelDemo() {
 	scene.Add(cam)
 
 	width, height := a.GetFramebufferSize()
-	scaleW, _ := a.GetScale()
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
 	cam.SetAspect(float32(width) / float32(height))
 
-	caseLabel := gui.NewLabel(group.ChildAt(0).Name())
-	caseLabel.SetFontSize(18)
-	caseLabel.SetColor(math32.NewColor("White"))
-	w, h := caseLabel.Size()
-	caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
-	scene.Add(caseLabel)
-
 	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
 		e := ev.(*window.KeyEvent)
-		if e.Key == window.KeySpace {
+		if e.Key == window.KeyLeftBracket || e.Key == window.KeyRightBracket {
 			for _, c := range group.Children() {
 				if v, ok := c.(Stepper); c.Visible() && ok {
-					index++
-					v.Step(index)
-					caseLabel.SetText(c.Name())
-					w, h := caseLabel.Size()
-					caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
+					if e.Key == window.KeyLeftBracket {
+						v.Step(-1)
+					} else {
+						v.Step(1)
+					}
 					break
 				}
 			}
@@ -217,9 +211,6 @@ func voxelDemo() {
 						i = -1
 					}
 					group.ChildAt(i + 1).SetVisible(true)
-					caseLabel.SetText(group.ChildAt(i + 1).Name())
-					w, h := caseLabel.Size()
-					caseLabel.SetPosition(float32(float64(width)/scaleW)/2-w/2, h)
 					vertexCountLabel.SetText(fmt.Sprintf("Vertices: %d", countVertices(group.ChildAt(i+1))))
 					break
 				}
