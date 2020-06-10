@@ -155,17 +155,7 @@ func NewTransvoxelCase() *TransvoxelCase {
 	return c
 }
 
-func (c *TransvoxelCase) Step(i int) int {
-	c.index += i
-	if c.index > 255 {
-		c.index = 255
-	}
-	if c.index < 0 {
-		c.index = 0
-	}
-
-	voxels := voxelsAtStep(uint8(c.index))
-
+func (c *TransvoxelCase) setVoxels(voxels [][][]int8) {
 	c.Node.Remove(c.labels)
 	c.labels = core.NewNode()
 	for x := 0; x < 2; x++ {
@@ -185,14 +175,28 @@ func (c *TransvoxelCase) Step(i int) int {
 	c.mesh.SetPosition(-1.5, -1.5, -1.5)
 	c.Node.Add(c.mesh)
 	c.label.SetText(fmt.Sprintf("Transvoxel Case %d", c.index))
+}
+
+func (c *TransvoxelCase) Step(i int) int {
+	c.index += i
+	if c.index > 255 {
+		c.index = 255
+	}
+	if c.index < 0 {
+		c.index = 0
+	}
+
+	c.setVoxels(voxelsAtStep(uint8(c.index)))
 
 	return c.index
 }
 
 type TransvoxelChunk struct {
-	core.INode
+	*core.Node
 
 	voxels [][][]int8
+	pos    int
+	cell   *TransvoxelCase
 }
 
 func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
@@ -221,12 +225,41 @@ func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	mesh.Init(geom, mat)
 }
 
+func (c *TransvoxelChunk) Step(i int) int {
+	c.pos += i
+	N, M, L := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
+	if c.pos >= N*M*L {
+		c.pos = 0
+	}
+	x, y, z := c.pos%N, c.pos/N%M, c.pos/(N*L)
+	voxels := inflate(c.voxels)
+	c.cell.setVoxels([][][]int8{
+		{
+			{voxels[x][y][z], voxels[x][y][z+1]},
+			{voxels[x][y+1][z], voxels[x][y+1][z+1]},
+		},
+		{
+			{voxels[x][y][z], voxels[x][y][z+1]},
+			{voxels[x+1][y+1][z], voxels[x+1][y+1][z+1]},
+		},
+	})
+	c.cell.SetPosition(float32(x)+1.5, float32(y)+1.5, float32(z)+1.5)
+	return c.pos
+}
+
 func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
+	N, M, L := len(voxels), len(voxels[0]), len(voxels[0][0])
+
 	positions, normals, indices := marchTransvoxels(inflate(voxels))
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
-	group.SetPosition(-float32(len(voxels))/2-1, -float32(len(voxels[0]))/2-1, -float32(len(voxels[0][0]))/2-1)
+	m.SetVisible(false)
+	group.SetPosition(-float32(N)/2-1, -float32(M)/2-1, -float32(L)/2-1)
 	group.SetName("Transvoxel")
-	return &TransvoxelChunk{group, voxels}
+
+	cell := NewTransvoxelCase()
+	group.Add(cell)
+
+	return &TransvoxelChunk{group, voxels, 0, cell}
 }

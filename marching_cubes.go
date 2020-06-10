@@ -147,7 +147,7 @@ func (c *MarchingCubesCase) Step(i int) int {
 }
 
 type MarchingCubesChunk struct {
-	core.INode
+	*core.Node
 
 	voxels [][][]int8
 }

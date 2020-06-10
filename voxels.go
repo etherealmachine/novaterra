@@ -269,7 +269,7 @@ func voxelDemo() {
 	log.Println("Action!")
 	frames := 0
 	t := time.Now()
-	a.Run(func(renderer *renderer.Renderer, _ time.Duration) {
+	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
 		frames++
 		elapsed := time.Now().Sub(t).Seconds()
 		fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", float64(frames)/elapsed))
