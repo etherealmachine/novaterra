@@ -105,18 +105,8 @@ func NewMarchingCubesCase() *MarchingCubesCase {
 	return c
 }
 
-func (c *MarchingCubesCase) Step(i int) int {
-	c.index += i
-	if c.index > 255 {
-		c.index = 255
-	}
-	if c.index < 0 {
-		c.index = 0
-	}
-
+func (c *MarchingCubesCase) setVoxels(voxels [][][]int8) {
 	c.Node.Remove(c.labels)
-	voxels := voxelsAtStep(uint8(c.index))
-
 	c.labels = core.NewNode()
 	for x := 0; x < 2; x++ {
 		for y := 0; y < 2; y++ {
@@ -142,6 +132,19 @@ func (c *MarchingCubesCase) Step(i int) int {
 	c.mesh.SetPosition(-0.5, -0.5, -0.5)
 	c.Node.Add(c.mesh)
 	c.label.SetText(fmt.Sprintf("Marching Cubes Case %d", c.index))
+}
+
+func (c *MarchingCubesCase) Step(i int) int {
+	c.index += i
+	if c.index > 255 {
+		c.index = 255
+	}
+	if c.index < 0 {
+		c.index = 0
+	}
+
+	c.Node.Remove(c.labels)
+	c.setVoxels(voxelsAtStep(uint8(c.index)))
 
 	return int(c.index)
 }
@@ -150,6 +153,8 @@ type MarchingCubesChunk struct {
 	*core.Node
 
 	voxels [][][]int8
+	pos    int
+	cell   *MarchingCubesCase
 }
 
 func (c *MarchingCubesChunk) HandleVoxelClick(x, y, z int, shift bool) {
@@ -181,12 +186,68 @@ func (c *MarchingCubesChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	mesh.Init(geom, mat)
 }
 
+func (c *MarchingCubesChunk) Step(i int) int {
+	c.pos += i
+	N, M, L := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
+	if c.pos >= N*M*L {
+		c.pos = 0
+	}
+	x, y, z := c.pos%N, c.pos/N%M, c.pos/(N*L)
+	for {
+		var cnrs [8]int8
+		for i, offset := range MarchingCubesNeighborOffsets {
+			nx, ny, nz := x+int(offset.X), y+int(offset.Y), z+int(offset.Z)
+			if nx < N && ny < M && nz < L {
+				cnrs[i] = c.voxels[nx][ny][nz]
+			}
+		}
+		index := 0
+		for i, value := range cnrs {
+			if value >= 0 {
+				index |= (1 << i)
+			}
+		}
+		if MarchingCubesEdges[index] != 0 {
+			break
+		}
+		c.pos += i
+		if c.pos >= N*M*L {
+			c.pos = 0
+		}
+		x, y, z = c.pos%N, c.pos/N%M, c.pos/(N*L)
+	}
+	var cnrs [8]int8
+	for i, offset := range MarchingCubesNeighborOffsets {
+		nx, ny, nz := x+int(offset.X), y+int(offset.Y), z+int(offset.Z)
+		if nx < N && ny < M && nz < L {
+			cnrs[i] = c.voxels[nx][ny][nz]
+		}
+	}
+	c.cell.setVoxels([][][]int8{
+		{
+			{cnrs[0], cnrs[4]},
+			{cnrs[3], cnrs[7]},
+		},
+		{
+			{cnrs[1], cnrs[5]},
+			{cnrs[2], cnrs[6]},
+		},
+	})
+	c.cell.SetPosition(float32(x)+.5, float32(y)+.5, float32(z)+.5)
+	return c.pos
+}
+
 func NewMarchingCubesChunk(voxels [][][]int8) *MarchingCubesChunk {
 	vertices := marchVoxels(voxels)
 	mesh := NewMesh(vertices)
-	node := core.NewNode()
-	node.Add(mesh)
-	node.SetPosition(-float32(len(voxels))/2+1, -float32(len(voxels[0]))/2+1, -float32(len(voxels[0][0]))/2+1)
-	node.SetName("Marching Cubes")
-	return &MarchingCubesChunk{node, voxels}
+	group := core.NewNode()
+	group.Add(mesh)
+	group.SetPosition(-float32(len(voxels))/2+1, -float32(len(voxels[0]))/2+1, -float32(len(voxels[0][0]))/2+1)
+	group.SetName("Marching Cubes")
+	mesh.GetMaterial(0).(*material.Standard).SetOpacity(0.5)
+
+	cell := NewMarchingCubesCase()
+	group.Add(cell)
+
+	return &MarchingCubesChunk{group, voxels, 0, cell}
 }

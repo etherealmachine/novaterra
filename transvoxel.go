@@ -37,9 +37,8 @@ func corners(x, y, z int, voxels [][][]int8) [8]int8 {
 	}
 }
 
-func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]float32, []float32, []uint32) {
-	c := corners(x, y, z, voxels)
-	index := uint8(((c[0] >> 7) & 0x01) |
+func transvoxelCase(x, y, z int, c [8]int8) uint8 {
+	return uint8(((c[0] >> 7) & 0x01) |
 		((c[1] >> 6) & 0x02) |
 		((c[2] >> 5) & 0x04) |
 		((c[3] >> 4) & 0x08) |
@@ -47,6 +46,11 @@ func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]
 		((c[5] >> 2) & 0x20) |
 		((c[6] >> 1) & 0x40) |
 		int8((byte(c[7]) & 0x80)))
+}
+
+func generateTransvoxelMesh(x, y, z int, voxels [][][]int8, maxIndex uint32) ([]float32, []float32, []uint32) {
+	c := corners(x, y, z, voxels)
+	index := transvoxelCase(x, y, z, c)
 	if (index ^ uint8((byte(c[7])>>7)&0xFF)) == 0 {
 		return nil, nil, nil
 	}
@@ -194,9 +198,10 @@ func (c *TransvoxelCase) Step(i int) int {
 type TransvoxelChunk struct {
 	*core.Node
 
-	voxels [][][]int8
-	pos    int
-	cell   *TransvoxelCase
+	voxels   [][][]int8
+	inflated [][][]int8
+	pos      int
+	cell     *TransvoxelCase
 }
 
 func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
@@ -232,15 +237,25 @@ func (c *TransvoxelChunk) Step(i int) int {
 		c.pos = 0
 	}
 	x, y, z := c.pos%N, c.pos/N%M, c.pos/(N*L)
-	voxels := inflate(c.voxels)
+	for {
+		cnrs := corners(x, y, z, c.inflated)
+		if transvoxelCase(x, y, z, cnrs)^uint8((byte(cnrs[7])>>7)&0xFF) != 0 {
+			break
+		}
+		c.pos += i
+		if c.pos >= N*M*L {
+			c.pos = 0
+		}
+		x, y, z = c.pos%N, c.pos/N%M, c.pos/(N*L)
+	}
 	c.cell.setVoxels([][][]int8{
 		{
-			{voxels[x][y][z], voxels[x][y][z+1]},
-			{voxels[x][y+1][z], voxels[x][y+1][z+1]},
+			{c.inflated[x][y][z], c.inflated[x][y][z+1]},
+			{c.inflated[x][y+1][z], c.inflated[x][y+1][z+1]},
 		},
 		{
-			{voxels[x][y][z], voxels[x][y][z+1]},
-			{voxels[x+1][y+1][z], voxels[x+1][y+1][z+1]},
+			{c.inflated[x+1][y][z], c.inflated[x+1][y][z+1]},
+			{c.inflated[x+1][y+1][z], c.inflated[x+1][y+1][z+1]},
 		},
 	})
 	c.cell.SetPosition(float32(x)+1.5, float32(y)+1.5, float32(z)+1.5)
@@ -250,16 +265,17 @@ func (c *TransvoxelChunk) Step(i int) int {
 func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	N, M, L := len(voxels), len(voxels[0]), len(voxels[0][0])
 
-	positions, normals, indices := marchTransvoxels(inflate(voxels))
+	inflated := inflate(voxels)
+	positions, normals, indices := marchTransvoxels(inflated)
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
-	m.SetVisible(false)
+	m.GetMaterial(0).(*material.Standard).SetOpacity(0.5)
 	group.SetPosition(-float32(N)/2-1, -float32(M)/2-1, -float32(L)/2-1)
 	group.SetName("Transvoxel")
 
 	cell := NewTransvoxelCase()
 	group.Add(cell)
 
-	return &TransvoxelChunk{group, voxels, 0, cell}
+	return &TransvoxelChunk{group, voxels, inflated, 0, cell}
 }
