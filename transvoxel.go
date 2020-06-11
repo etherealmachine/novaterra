@@ -259,6 +259,7 @@ func (c *TransvoxelChunk) Step(i int) int {
 		},
 	})
 	c.cell.SetPosition(float32(x)+1.5, float32(y)+1.5, float32(z)+1.5)
+	c.SetPosition(-float32(x), -float32(y), -float32(z))
 	return c.pos
 }
 

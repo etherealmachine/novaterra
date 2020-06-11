@@ -197,7 +197,7 @@ func (c *MarchingCubesChunk) Step(i int) int {
 		var cnrs [8]int8
 		for i, offset := range MarchingCubesNeighborOffsets {
 			nx, ny, nz := x+int(offset.X), y+int(offset.Y), z+int(offset.Z)
-			if nx < N && ny < M && nz < L {
+			if nx >= 0 && nx < N && ny >= 0 && ny < M && nz >= 0 && nz < L {
 				cnrs[i] = c.voxels[nx][ny][nz]
 			}
 		}
@@ -234,6 +234,7 @@ func (c *MarchingCubesChunk) Step(i int) int {
 		},
 	})
 	c.cell.SetPosition(float32(x)+.5, float32(y)+.5, float32(z)+.5)
+	c.SetPosition(-float32(x), -float32(y), -float32(z))
 	return c.pos
 }
 
