@@ -245,7 +245,7 @@ func NewMarchingCubesChunk(voxels [][][]int8) *MarchingCubesChunk {
 	group.Add(mesh)
 	group.SetPosition(-float32(len(voxels))/2+1, -float32(len(voxels[0]))/2+1, -float32(len(voxels[0][0]))/2+1)
 	group.SetName("Marching Cubes")
-	mesh.GetMaterial(0).(*material.Standard).SetOpacity(0.5)
+	mesh.GetMaterial(0).(*material.Standard).SetOpacity(0.3)
 
 	cell := NewMarchingCubesCase()
 	group.Add(cell)

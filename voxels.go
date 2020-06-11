@@ -139,8 +139,6 @@ func voxelDemo() {
 
 	voxels := simplexTerrain(16, 16, 16)
 
-	voxels[7][7][7] = -127
-
 	group := core.NewNode()
 	group.Add(NewVoxelLabels(voxels))
 	group.Add(NewMarchingCubesCase())
