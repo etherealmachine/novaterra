@@ -190,19 +190,19 @@ func readColorAt(gl *gls.GLS, x, y int) *math32.Color4 {
 	return &math32.Color4{R: r, G: g, B: b, A: a}
 }
 
-func simplexTerrain(n, m, l int) [][][]int8 {
+func simplexTerrain(lod, x, y, z, n, m, l int) [][][]int8 {
 	noise := opensimplex.NewNormalized32(0)
 	voxels := make([][][]int8, n)
-	for x := 0; x < n; x++ {
-		voxels[x] = make([][]int8, m)
-		for y := 0; y < m; y++ {
-			voxels[x][y] = make([]int8, l)
+	for i := 0; i < n; i++ {
+		voxels[i] = make([][]int8, m)
+		for j := 0; j < m; j++ {
+			voxels[i][j] = make([]int8, l)
 		}
 	}
-	for x := 0; x < n; x++ {
-		for y := 0; y < m; y++ {
-			for z := 0; z < l; z++ {
-				voxels[x][y][z] = int8(256*octaveNoise(noise, 16, float32(x), float32(y), float32(z), .5, 0.07) - 127)
+	for ox := 0; ox < n; ox++ {
+		for oy := 0; oy < m; oy++ {
+			for oz := 0; oz < l; oz++ {
+				voxels[ox][oy][oz] = int8(256*octaveNoise(noise, 16, float32(x+ox*1<<lod), float32(y+oy*1<<lod), float32(z+oz*1<<lod), .5, 0.07) - 127)
 			}
 		}
 	}

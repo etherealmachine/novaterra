@@ -251,7 +251,7 @@ func (c *TransvoxelCase) Step(i int) int {
 	return c.index
 }
 
-type TransvoxelChunk struct {
+type TransvoxelDemoChunk struct {
 	*core.Node
 
 	voxels [][][]int8
@@ -259,7 +259,7 @@ type TransvoxelChunk struct {
 	cell   *TransvoxelCase
 }
 
-func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
+func (c *TransvoxelDemoChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	n, m, l := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
 	for ox := -1; ox <= 1; ox++ {
 		for oy := -1; oy <= 1; oy++ {
@@ -285,7 +285,7 @@ func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	mesh.Init(geom, mat)
 }
 
-func (c *TransvoxelChunk) Step(i int) int {
+func (c *TransvoxelDemoChunk) Step(i int) int {
 	c.pos += i
 	N, M, L := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
 	N--
@@ -321,7 +321,7 @@ func (c *TransvoxelChunk) Step(i int) int {
 	return c.pos
 }
 
-func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
+func NewTransvoxelDemoChunk(voxels [][][]int8) *TransvoxelDemoChunk {
 
 	voxels = inflate(voxels)
 	N, M, L := len(voxels), len(voxels[0]), len(voxels[0][0])
@@ -336,7 +336,7 @@ func NewTransvoxelChunk(voxels [][][]int8) *TransvoxelChunk {
 	cell := NewTransvoxelCase()
 	group.Add(cell)
 
-	c := &TransvoxelChunk{group, voxels, 0, cell}
+	c := &TransvoxelDemoChunk{group, voxels, 0, cell}
 	c.Step(1)
 	return c
 }

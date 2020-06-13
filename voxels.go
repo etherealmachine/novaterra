@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
 	"github.com/g3n/engine/experimental/collision"
@@ -17,25 +16,8 @@ import (
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
-	"github.com/g3n/engine/text"
 	"github.com/g3n/engine/window"
 )
-
-var (
-	a    *app.Application
-	font *text.Font
-)
-
-func init() {
-	var err error
-	font, err = text.NewFont("fonts/arial.ttf")
-	if err != nil {
-		panic(err)
-	}
-	font.SetPointSize(14)
-	font.SetDPI(90)
-	font.SetFgColor(math32.NewColor4("White"))
-}
 
 type CubesChunk struct {
 	core.INode
@@ -131,13 +113,10 @@ type Stepper interface {
 	Step(s int) int
 }
 
-func voxelDemo() {
-
-	a = app.App()
+func NewVoxelDemoScene() *core.Node {
 	scene := core.NewNode()
-	gui.Manager().Set(scene)
 
-	voxels := simplexTerrain(16, 16, 16)
+	voxels := simplexTerrain(0, 0, 0, 0, 16, 16, 16)
 
 	group := core.NewNode()
 	group.Add(NewVoxelLabels(voxels))
@@ -145,7 +124,7 @@ func voxelDemo() {
 	group.Add(NewTransvoxelCase())
 	group.Add(NewCubesChunk(voxels))
 	group.Add(NewMarchingCubesChunk(voxels))
-	group.Add(NewTransvoxelChunk(voxels))
+	group.Add(NewTransvoxelDemoChunk(voxels))
 	for i, c := range group.Children() {
 		if i != 0 {
 			c.SetVisible(false)
@@ -313,4 +292,6 @@ func voxelDemo() {
 			panic(err)
 		}
 	})
+
+	return scene
 }

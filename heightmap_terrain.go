@@ -8,7 +8,6 @@ import (
 
 	"github.com/ojrac/opensimplex-go"
 
-	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
 	"github.com/g3n/engine/geometry"
@@ -145,9 +144,7 @@ func (m *HeightmapTerrainMaterial) RenderSetup(gl *gls.GLS) {
 	gl.Uniform1i(m.uniformOverlay.Location(gl), m.Overlay)
 }
 
-func heightmapTerrainDemo() {
-
-	a := app.App()
+func NewHeightmapTerrainDemoScene() *core.Node {
 
 	files, err := ioutil.ReadDir("shaders")
 	if err != nil {
@@ -171,9 +168,6 @@ func heightmapTerrainDemo() {
 	a.Renderer().AddProgram("transfer_sediment", "compute.vert", "transfer_sediment.frag")
 
 	scene := core.NewNode()
-
-	// Set the scene to be managed by the gui manager
-	gui.Manager().Set(scene)
 
 	// Create perspective camera
 	cam := camera.New(1)
@@ -412,4 +406,6 @@ func heightmapTerrainDemo() {
 			panic(err)
 		}
 	})
+
+	return scene
 }
