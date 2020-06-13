@@ -6,6 +6,8 @@ import (
 
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
+	"github.com/g3n/engine/experimental/physics"
+	"github.com/g3n/engine/experimental/physics/object"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -14,6 +16,7 @@ import (
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/window"
+	"github.com/ojrac/opensimplex-go"
 )
 
 type TransvoxelChunk struct {
@@ -22,6 +25,8 @@ type TransvoxelChunk struct {
 	voxels  [][][]int8
 	x, y, z int
 	lod     int
+
+	mesh *graphic.Mesh
 }
 
 func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
@@ -50,43 +55,48 @@ func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
 	mesh.Init(geom, mat)
 }
 
-func NewTransvoxelChunk(lod, x, y, z int, voxels [][][]int8) *TransvoxelChunk {
+func NewTransvoxelChunk(lod, x, y, z int) *TransvoxelChunk {
+	noise := opensimplex.NewNormalized32(0)
+	voxels := make([][][]int8, 16)
+	for i := 0; i < 16; i++ {
+		voxels[i] = make([][]int8, 16)
+		for j := 0; j < 16; j++ {
+			voxels[i][j] = make([]int8, 16)
+		}
+	}
+	for ox := 0; ox < 16; ox++ {
+		for oz := 0; oz < 16; oz++ {
+			height := 15*octaveNoise(noise, 16, float32(x*16+ox), 0, float32(z*16+oz), .5, 0.09) + 1
+			density := float32(-127)
+			deltaDensity := 256 / height
+			for oy := 0; oy < int(height); oy++ {
+				voxels[ox][oy][oz] = int8(density)
+				density += deltaDensity
+			}
+		}
+	}
+
 	voxels = inflate(voxels)
-	N, M, L := len(voxels), len(voxels[0]), len(voxels[0][0])
 	positions, normals, indices := marchTransvoxels(voxels)
 	m := NewFastMesh(positions, normals, indices)
 	group := core.NewNode()
 	group.Add(m)
-	group.SetPosition(-float32(N)/2-1+float32(x), -float32(M)/2-1+float32(y), -float32(L)/2-1+float32(z))
-	scale := float32(int(1) << lod)
-	group.SetScale(scale, scale, scale)
-	return &TransvoxelChunk{group, voxels, x, y, z, lod}
+	group.SetPosition(float32(x)*16, float32(y)*16, float32(z)*16)
+	return &TransvoxelChunk{group, voxels, x, y, z, lod, m}
 }
 
 func NewTransvoxelTerrainScene() *core.Node {
 	scene := core.NewNode()
 
-	N, M, L := 16, 16, 16
-	for x := 0; x < 10; x++ {
-		for z := 0; z < 10; z++ {
-			dx, dz := float32(x-5), float32(z-5)
-			dist := math32.Floor(math32.Sqrt(dx*dx + dz*dz))
-			lod := int(dist)
-			if lod > 2 {
-				lod = 2
-			}
-			voxels := simplexTerrain(lod, x*16, 0, z*16, N, M, L)
-			terrain := NewTransvoxelChunk(lod, x*16, 0, z*16, voxels)
-			scene.Add(terrain)
-		}
-	}
+	terrain := NewTransvoxelChunk(0, 0, 0, 0)
+	scene.Add(terrain)
 
 	log.Println("Lights")
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
 	scene.Add(ambientLight)
-	sphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), material.NewStandard(math32.NewColor("White")))
-	sphere.SetPosition(30, 60, -30)
-	scene.Add(sphere)
+	lightSphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), material.NewStandard(math32.NewColor("White")))
+	lightSphere.SetPosition(30, 60, -30)
+	scene.Add(lightSphere)
 	pointLight := light.NewPoint(math32.NewColor("White"), 10000.0)
 	pointLight.SetPosition(30, 60, -30)
 	scene.Add(pointLight)
@@ -117,47 +127,40 @@ func NewTransvoxelTerrainScene() *core.Node {
 		}
 	})
 
-	/*
-		caster := collision.NewRaycaster(&math32.Vector3{}, &math32.Vector3{})
-		mouseX, mouseY := float32(0), float32(0)
-		a.SubscribeID(window.OnCursor, a, func(evname string, ev interface{}) {
-			e := ev.(*window.CursorEvent)
-			mouseX = e.Xpos
-			mouseY = e.Ypos
-		})
-
-		mouseDown := false
-		shift := false
-		a.SubscribeID(window.OnMouseDown, a, func(evname string, ev interface{}) {
-			mouseDown = true
-			shift = ev.(*window.MouseEvent).Button == 1
-		})
-		a.SubscribeID(window.OnMouseUp, a, func(evname string, ev interface{}) {
-			mouseDown = false
-			shift = false
-		})
-	*/
-
 	log.Println("Action!")
-	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
-		/*
-			if mouseDown {
-				width, height := a.GetSize()
-				x := 2*(mouseX/float32(width)) - 1
-				y := -2*(mouseY/float32(height)) + 1
 
-				caster.SetFromCamera(cam, x, y)
-				intersects := caster.IntersectObject(terrain, true)
-				if len(intersects) > 0 {
-					firstHit := intersects[0]
-					pos := terrain.Position()
-					vx := int(math32.Clamp(firstHit.Point.X-pos.X+0.5+0.5*caster.Direction().X, 0, float32(N-1)))
-					vy := int(math32.Clamp(firstHit.Point.Y-pos.Y+0.5+0.5*caster.Direction().Y, 0, float32(M-1)))
-					vz := int(math32.Clamp(firstHit.Point.Z-pos.Z+0.5+0.5*caster.Direction().Z, 0, float32(L-1)))
-					terrain.HandleVoxelClick(vx, vy, vz, shift)
-				}
-			}
-		*/
+	sim := physics.NewSimulation(scene)
+	terrainBody := object.NewBody(terrain.mesh)
+	terrainBody.SetBodyType(object.Static)
+	sim.AddBody(terrainBody, "Terrain")
+
+	sphereGeom := geometry.NewSphere(0.5, 16, 8)
+	mat := material.NewStandard(&math32.Color{1, 1, 1})
+	sphere := graphic.NewMesh(sphereGeom, mat)
+	sphere.SetPosition(8, 8, 8)
+	scene.Add(sphere)
+	sphereBody := object.NewBody(sphere)
+	sim.AddBody(sphereBody, "Sphere")
+
+	gravity := physics.NewConstantForceField(&math32.Vector3{0, -9.8, 0})
+	sim.AddForceField(gravity)
+
+	a.Subscribe(window.OnKeyDown, func(evname string, ev interface{}) {
+		kev := ev.(*window.KeyEvent)
+		switch kev.Key {
+		case window.KeyW:
+			sphereBody.ApplyVelocityDeltas(math32.NewVector3(-1, 0, 0), math32.NewVector3(0, 0, 1))
+		case window.KeyA:
+			sphereBody.ApplyVelocityDeltas(math32.NewVector3(0, 0, -1), math32.NewVector3(0, 0, -1))
+		case window.KeyS:
+			sphereBody.ApplyVelocityDeltas(math32.NewVector3(1, 0, 0), math32.NewVector3(0, 0, 1))
+		case window.KeyD:
+			sphereBody.ApplyVelocityDeltas(math32.NewVector3(0, 0, 1), math32.NewVector3(0, 0, -1))
+		}
+	})
+
+	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		sim.Step(float32(deltaTime.Seconds()))
 
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
