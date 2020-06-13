@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
+	"github.com/g3n/engine/gui"
 	"github.com/g3n/engine/light"
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
@@ -88,8 +90,14 @@ func NewTransvoxelChunk(lod, x, y, z int) *TransvoxelChunk {
 func NewTransvoxelTerrainScene() *core.Node {
 	scene := core.NewNode()
 
-	terrain := NewTransvoxelChunk(0, 0, 0, 0)
-	scene.Add(terrain)
+	var chunks []*TransvoxelChunk
+	for x := 0; x < 10; x++ {
+		for z := 0; z < 10; z++ {
+			chunk := NewTransvoxelChunk(0, x, 0, z)
+			scene.Add(chunk)
+			chunks = append(chunks, chunk)
+		}
+	}
 
 	log.Println("Lights")
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
@@ -130,14 +138,16 @@ func NewTransvoxelTerrainScene() *core.Node {
 	log.Println("Action!")
 
 	sim := physics.NewSimulation(scene)
-	terrainBody := object.NewBody(terrain.mesh)
-	terrainBody.SetBodyType(object.Static)
-	sim.AddBody(terrainBody, "Terrain")
+	for i, chunk := range chunks {
+		body := object.NewBody(chunk.mesh)
+		body.SetBodyType(object.Static)
+		sim.AddBody(body, fmt.Sprintf("Terrain Chunk %d", i))
+	}
 
-	sphereGeom := geometry.NewSphere(0.5, 16, 8)
+	sphereGeom := geometry.NewSphere(1, 16, 8)
 	mat := material.NewStandard(&math32.Color{1, 1, 1})
 	sphere := graphic.NewMesh(sphereGeom, mat)
-	sphere.SetPosition(8, 8, 8)
+	sphere.SetPosition(8, 10, 8)
 	scene.Add(sphere)
 	sphereBody := object.NewBody(sphere)
 	sim.AddBody(sphereBody, "Sphere")
@@ -147,21 +157,35 @@ func NewTransvoxelTerrainScene() *core.Node {
 
 	a.Subscribe(window.OnKeyDown, func(evname string, ev interface{}) {
 		kev := ev.(*window.KeyEvent)
+		zero := &math32.Vector3{}
 		switch kev.Key {
 		case window.KeyW:
-			sphereBody.ApplyVelocityDeltas(math32.NewVector3(-1, 0, 0), math32.NewVector3(0, 0, 1))
+			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, -10, 0), zero)
 		case window.KeyA:
-			sphereBody.ApplyVelocityDeltas(math32.NewVector3(0, 0, -1), math32.NewVector3(0, 0, -1))
+			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 0, 1), zero)
 		case window.KeyS:
-			sphereBody.ApplyVelocityDeltas(math32.NewVector3(1, 0, 0), math32.NewVector3(0, 0, 1))
+			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 10, 0), zero)
 		case window.KeyD:
-			sphereBody.ApplyVelocityDeltas(math32.NewVector3(0, 0, 1), math32.NewVector3(0, 0, -1))
+			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 0, -1), zero)
 		}
 	})
 
+	fpsLabel := gui.NewLabel("FPS:")
+	fpsLabel.SetPosition(10, 10)
+	fpsLabel.SetFontSize(14)
+	fpsLabel.SetColor(math32.NewColor("White"))
+	scene.Add(fpsLabel)
+	frames := 0
+	t := time.Now()
 	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
+		frames++
+		elapsed := time.Now().Sub(t).Seconds()
+		fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", float64(frames)/elapsed))
+		if elapsed >= 1 {
+			frames = 0
+			t = time.Now()
+		}
 		sim.Step(float32(deltaTime.Seconds()))
-
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
