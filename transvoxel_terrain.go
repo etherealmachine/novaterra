@@ -7,8 +7,6 @@ import (
 
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
-	"github.com/g3n/engine/experimental/physics"
-	"github.com/g3n/engine/experimental/physics/object"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -137,37 +135,8 @@ func NewTransvoxelTerrainScene() *core.Node {
 
 	log.Println("Action!")
 
-	sim := physics.NewSimulation(scene)
-	for i, chunk := range chunks {
-		body := object.NewBody(chunk.mesh)
-		body.SetBodyType(object.Static)
-		sim.AddBody(body, fmt.Sprintf("Terrain Chunk %d", i))
-	}
-
-	sphereGeom := geometry.NewSphere(1, 16, 8)
-	mat := material.NewStandard(&math32.Color{1, 1, 1})
-	sphere := graphic.NewMesh(sphereGeom, mat)
-	sphere.SetPosition(8, 10, 8)
-	scene.Add(sphere)
-	sphereBody := object.NewBody(sphere)
-	sim.AddBody(sphereBody, "Sphere")
-
-	gravity := physics.NewConstantForceField(&math32.Vector3{0, -9.8, 0})
-	sim.AddForceField(gravity)
-
 	a.Subscribe(window.OnKeyDown, func(evname string, ev interface{}) {
-		kev := ev.(*window.KeyEvent)
-		zero := &math32.Vector3{}
-		switch kev.Key {
-		case window.KeyW:
-			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, -10, 0), zero)
-		case window.KeyA:
-			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 0, 1), zero)
-		case window.KeyS:
-			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 10, 0), zero)
-		case window.KeyD:
-			sphereBody.ApplyLocalImpulse(math32.NewVector3(0, 0, -1), zero)
-		}
+		//kev := ev.(*window.KeyEvent)
 	})
 
 	fpsLabel := gui.NewLabel("FPS:")
@@ -185,7 +154,6 @@ func NewTransvoxelTerrainScene() *core.Node {
 			frames = 0
 			t = time.Now()
 		}
-		sim.Step(float32(deltaTime.Seconds()))
 		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 		if err := renderer.Render(scene, cam); err != nil {
 			panic(err)
