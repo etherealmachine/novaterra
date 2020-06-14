@@ -95,6 +95,8 @@ type TransvoxelTerrainScene struct {
 	pitch, yaw      float32
 	mouseX, mouseY  float32
 	fpsLabel        *gui.Label
+
+	velocity *math32.Vector3
 }
 
 func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
@@ -126,7 +128,7 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	scene.Add(orbitCam)
 
 	fpCam := camera.New(1)
-	fpCam.SetPosition(0, 0, 40)
+	fpCam.SetPosition(100, 100, 40)
 	scene.Add(fpCam)
 
 	width, height := a.GetFramebufferSize()
@@ -150,6 +152,7 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 		fpsLabel:     fpsLabel,
 		mouseX:       float32(width) / 2,
 		mouseY:       float32(height) / 2,
+		velocity:     &math32.Vector3{},
 	}
 
 	a.SubscribeID(window.OnKeyDown, a, s.OnKeyPress)
@@ -171,7 +174,6 @@ func (s *TransvoxelTerrainScene) OnKeyPress(evname string, ev interface{}) {
 			0,
 			math32.Sin(s.yaw),
 		}
-		up := forward.Clone().Cross(right)
 		pos := s.fpCam.Position()
 		switch e.Key {
 		case window.KeyUp:
@@ -182,10 +184,8 @@ func (s *TransvoxelTerrainScene) OnKeyPress(evname string, ev interface{}) {
 			s.cam.SetPositionVec((&pos).Add(right.Negate()))
 		case window.KeyRight:
 			s.cam.SetPositionVec((&pos).Add(right))
-		case window.KeyI:
-			s.cam.SetPositionVec((&pos).Add(up))
-		case window.KeyK:
-			s.cam.SetPositionVec((&pos).Add(up.Negate()))
+		case window.KeySpace:
+			s.velocity.Add(&math32.Vector3{0, 10, 0})
 		}
 	} else {
 		switch e.Key {
@@ -243,6 +243,31 @@ func (s *TransvoxelTerrainScene) OnMouseMove(evname string, ev interface{}) {
 
 func (s *TransvoxelTerrainScene) Update(renderer *renderer.Renderer, deltaTime time.Duration) {
 	s.fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", 1/float64(deltaTime.Seconds())))
+
+	pos := s.fpCam.Position()
+	(&pos).Add(s.velocity.Clone().MultiplyScalar(float32(deltaTime.Seconds())))
+
+	s.velocity.Add((&math32.Vector3{0, -9.8, 0}).MultiplyScalar(float32(deltaTime.Seconds())))
+
+	chunkX, chunkZ := int(math32.Floor(pos.X/16)), int(math32.Floor(pos.Z/16))
+	if chunkX >= 0 && chunkX < 10 && chunkZ >= 0 && chunkZ < 10 {
+		chunk := s.chunks[chunkX+10*chunkZ]
+
+		voxelX, voxelZ := int(math32.Mod(pos.X, 16)), int(math32.Mod(pos.Z, 16))
+		var height float32
+		for y := 15; y >= 0; y-- {
+			if chunk.voxels[voxelX][y][voxelZ] < 0 {
+				height = float32(y)
+				break
+			}
+		}
+		if pos.Y-10 <= height {
+			s.velocity = &math32.Vector3{}
+			pos.Y = height + 10
+		}
+	}
+	s.fpCam.SetPositionVec(&pos)
+
 	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 	if err := renderer.Render(s, s.cam); err != nil {
 		panic(err)
