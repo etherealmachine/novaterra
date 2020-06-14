@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/g3n/engine/camera"
@@ -16,6 +15,7 @@ import (
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/window"
+	"github.com/go-gl/glfw/v3.2/glfw"
 	"github.com/ojrac/opensimplex-go"
 )
 
@@ -85,7 +85,19 @@ func NewTransvoxelChunk(lod, x, y, z int) *TransvoxelChunk {
 	return &TransvoxelChunk{group, voxels, x, y, z, lod, m}
 }
 
-func NewTransvoxelTerrainScene() *core.Node {
+type TransvoxelTerrainScene struct {
+	*core.Node
+
+	chunks          []*TransvoxelChunk
+	cam             *camera.Camera
+	orbitCam, fpCam *camera.Camera
+	orbitControl    *camera.OrbitControl
+	pitch, yaw      float32
+	mouseX, mouseY  float32
+	fpsLabel        *gui.Label
+}
+
+func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	scene := core.NewNode()
 
 	var chunks []*TransvoxelChunk
@@ -97,7 +109,6 @@ func NewTransvoxelTerrainScene() *core.Node {
 		}
 	}
 
-	log.Println("Lights")
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
 	scene.Add(ambientLight)
 	lightSphere := graphic.NewMesh(geometry.NewSphere(1, 10, 10), material.NewStandard(math32.NewColor("White")))
@@ -107,58 +118,133 @@ func NewTransvoxelTerrainScene() *core.Node {
 	pointLight.SetPosition(30, 60, -30)
 	scene.Add(pointLight)
 
-	log.Println("Camera")
-	cam := camera.New(1)
-	cam.SetPosition(0, 0, 40)
-	camControl := camera.NewOrbitControl(cam)
-	camControl.SetEnabled(camera.OrbitZoom | camera.OrbitKeys)
-	camControl.Rotate(math32.DegToRad(45), math32.DegToRad(-25))
-	scene.Add(cam)
+	orbitCam := camera.New(1)
+	orbitCam.SetPosition(0, 0, 40)
+	orbitControl := camera.NewOrbitControl(orbitCam)
+	orbitControl.SetEnabled(camera.OrbitZoom | camera.OrbitKeys)
+	orbitControl.Rotate(math32.DegToRad(45), math32.DegToRad(-25))
+	scene.Add(orbitCam)
+
+	fpCam := camera.New(1)
+	fpCam.SetPosition(0, 0, 40)
+	scene.Add(fpCam)
 
 	width, height := a.GetFramebufferSize()
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
-	cam.SetAspect(float32(width) / float32(height))
-
-	a.SubscribeID(window.OnKeyDown, a, func(evname string, ev interface{}) {
-		e := ev.(*window.KeyEvent)
-		switch e.Key {
-		case window.KeyUp:
-			camControl.Rotate(0, -camControl.KeyRotSpeed)
-		case window.KeyDown:
-			camControl.Rotate(0, camControl.KeyRotSpeed)
-		case window.KeyLeft:
-			camControl.Rotate(-camControl.KeyRotSpeed, 0)
-		case window.KeyRight:
-			camControl.Rotate(camControl.KeyRotSpeed, 0)
-		}
-	})
-
-	log.Println("Action!")
-
-	a.Subscribe(window.OnKeyDown, func(evname string, ev interface{}) {
-		//kev := ev.(*window.KeyEvent)
-	})
+	orbitCam.SetAspect(float32(width) / float32(height))
+	fpCam.SetAspect(float32(width) / float32(height))
 
 	fpsLabel := gui.NewLabel("FPS:")
 	fpsLabel.SetPosition(10, 10)
 	fpsLabel.SetFontSize(14)
 	fpsLabel.SetColor(math32.NewColor("White"))
 	scene.Add(fpsLabel)
-	frames := 0
-	t := time.Now()
-	a.Run(func(renderer *renderer.Renderer, deltaTime time.Duration) {
-		frames++
-		elapsed := time.Now().Sub(t).Seconds()
-		fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", float64(frames)/elapsed))
-		if elapsed >= 1 {
-			frames = 0
-			t = time.Now()
-		}
-		a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
-		if err := renderer.Render(scene, cam); err != nil {
-			panic(err)
-		}
-	})
 
-	return scene
+	s := &TransvoxelTerrainScene{
+		Node:         scene,
+		cam:          orbitCam,
+		orbitCam:     orbitCam,
+		orbitControl: orbitControl,
+		fpCam:        fpCam,
+		chunks:       chunks,
+		fpsLabel:     fpsLabel,
+		mouseX:       float32(width) / 2,
+		mouseY:       float32(height) / 2,
+	}
+
+	a.SubscribeID(window.OnKeyDown, a, s.OnKeyPress)
+	a.SubscribeID(window.OnKeyRepeat, a, s.OnKeyPress)
+	a.SubscribeID(window.OnCursor, a, s.OnMouseMove)
+	return s
+}
+
+func (s *TransvoxelTerrainScene) OnKeyPress(evname string, ev interface{}) {
+	e := ev.(*window.KeyEvent)
+	if s.cam == s.fpCam {
+		forward := &math32.Vector3{
+			-math32.Sin(s.yaw) * math32.Cos(s.pitch),
+			-math32.Sin(s.pitch),
+			-math32.Cos(s.yaw) * math32.Cos(s.pitch),
+		}
+		right := &math32.Vector3{
+			-math32.Cos(s.yaw),
+			0,
+			math32.Sin(s.yaw),
+		}
+		up := forward.Clone().Cross(right)
+		pos := s.fpCam.Position()
+		switch e.Key {
+		case window.KeyUp:
+			s.cam.SetPositionVec((&pos).Add(forward.Negate()))
+		case window.KeyDown:
+			s.cam.SetPositionVec((&pos).Add(forward))
+		case window.KeyLeft:
+			s.cam.SetPositionVec((&pos).Add(right.Negate()))
+		case window.KeyRight:
+			s.cam.SetPositionVec((&pos).Add(right))
+		case window.KeyI:
+			s.cam.SetPositionVec((&pos).Add(up))
+		case window.KeyK:
+			s.cam.SetPositionVec((&pos).Add(up.Negate()))
+		}
+	} else {
+		switch e.Key {
+		case window.KeyUp:
+			s.orbitControl.Rotate(0, -s.orbitControl.KeyRotSpeed)
+		case window.KeyDown:
+			s.orbitControl.Rotate(0, s.orbitControl.KeyRotSpeed)
+		case window.KeyLeft:
+			s.orbitControl.Rotate(-s.orbitControl.KeyRotSpeed, 0)
+		case window.KeyRight:
+			s.orbitControl.Rotate(s.orbitControl.KeyRotSpeed, 0)
+		}
+	}
+
+	switch e.Key {
+	case window.KeyTab:
+		if s.cam == s.orbitCam {
+			s.cam = s.fpCam
+			window.Get().(*window.GlfwWindow).SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+		} else {
+			s.cam = s.orbitCam
+			window.Get().(*window.GlfwWindow).SetInputMode(glfw.CursorMode, glfw.CursorNormal)
+		}
+	}
+}
+
+func (s *TransvoxelTerrainScene) OnMouseMove(evname string, ev interface{}) {
+	e := ev.(*window.CursorEvent)
+	if s.cam == s.fpCam {
+		s.yaw += math32.DegToRad(0.1 * (s.mouseX - e.Xpos))
+		s.pitch += math32.DegToRad(0.1 * (s.mouseY - e.Ypos))
+		forward := &math32.Vector3{
+			-math32.Sin(s.yaw) * math32.Cos(s.pitch),
+			-math32.Sin(s.pitch),
+			-math32.Cos(s.yaw) * math32.Cos(s.pitch),
+		}
+		right := &math32.Vector3{
+			-math32.Cos(s.yaw),
+			0,
+			math32.Sin(s.yaw),
+		}
+		up := forward.Clone().Cross(right)
+		pos := s.cam.Position()
+		forward, right, up = forward.Normalize(), right.Normalize(), up.Normalize()
+		s.cam.SetMatrix(&math32.Matrix4{
+			right.X, right.Y, right.Z, 0,
+			up.X, up.Y, up.Z, 0,
+			forward.X, forward.Y, forward.Z, 0,
+			pos.X, pos.Y, pos.Z, 1,
+		})
+	}
+	s.mouseX = e.Xpos
+	s.mouseY = e.Ypos
+}
+
+func (s *TransvoxelTerrainScene) Update(renderer *renderer.Renderer, deltaTime time.Duration) {
+	s.fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", 1/float64(deltaTime.Seconds())))
+	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
+	if err := renderer.Render(s, s.cam); err != nil {
+		panic(err)
+	}
 }

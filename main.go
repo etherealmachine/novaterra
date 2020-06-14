@@ -35,7 +35,8 @@ func main() {
 	case "voxels":
 		NewVoxelDemoScene()
 	case "transvoxel":
-		NewTransvoxelTerrainScene()
+		s := NewTransvoxelTerrainScene()
+		a.Run(s.Update)
 	default:
 		panic(fmt.Sprintf("Invalid demo %q", *demo))
 	}
