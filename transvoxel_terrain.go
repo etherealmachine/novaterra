@@ -43,7 +43,7 @@ func (n *TransvoxelNode) HandleVoxelClick(x, y, z int, shift bool) {
 			}
 		}
 	}
-	positions, normals, indices := marchTransvoxels(*n.voxels)
+	positions, normals, indices := marchTransvoxels(n.voxels)
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
@@ -54,58 +54,70 @@ func (n *TransvoxelNode) HandleVoxelClick(x, y, z int, shift bool) {
 func (n *TransvoxelNode) Expand() {
 	lodMult := 1 << n.level
 	size := lodMult * 16
-	nextSize := (lodMult - 1) * 16
 	var children [8]*TransvoxelNode
 	for i := 0; i < 8; i++ {
 		o := NeighborOffsets[i]
 		ox, oy, oz := int(o[0]), int(o[1]), int(o[2])
 		children[i] = &TransvoxelNode{
 			level: n.level - 1,
-			x:     n.x*size + ox*nextSize,
-			y:     n.y*size + oy*nextSize,
-			z:     n.z*size + oz*nextSize,
+			x:     n.x + ox*size/2,
+			y:     n.y + oy*size/2,
+			z:     n.z + oz*size/2,
+		}
+		if children[i].level > 0 {
+			children[i].Expand()
 		}
 	}
 	n.children = &children
 }
 
 func (n *TransvoxelNode) Render(scene *core.Node) {
+	if n.children == nil {
+		n.render(scene)
+		return
+	}
+	for i, c := range n.children {
+		if i == 0 {
+			c.Render(scene)
+		} else {
+			c.render(scene)
+		}
+	}
+}
+
+func (n *TransvoxelNode) render(scene *core.Node) {
+	lodMult := 1 << n.level
 	noise := opensimplex.NewNormalized32(0)
 	var voxels [19][19][19]int8
 	if n.y < 16 {
 		for ox := 0; ox < 19; ox++ {
 			for oz := 0; oz < 19; oz++ {
-				height := 15*octaveNoise(noise, 16, float32(n.x*16+ox), 0, float32(n.z*16+oz), .5, 0.09) + 1
+				height := 15*octaveNoise(noise, 16, float32(n.x+ox*lodMult), 0, float32(n.z+oz*lodMult), .5, 0.09) + 1
+				height /= float32(lodMult)
 				density := float32(-127)
 				deltaDensity := 256 / height
-				for oy := 0; oy < int(height); oy++ {
+				voxels[ox][0][oz] = -127
+				for oy := 1; oy < int(height); oy++ {
 					voxels[ox][oy][oz] = int8(density)
 					density += deltaDensity
 				}
 			}
 		}
 	}
-
 	n.voxels = &voxels
-	positions, normals, indices := marchTransvoxels(voxels)
+	positions, normals, indices := marchTransvoxels(n.voxels)
 	n.mesh = NewFastMesh(positions, normals, indices)
-	lodMult := float32(int(1 << n.level))
-	n.mesh.SetPosition(-8, -8, -8)
-
 	scene.Remove(n.group)
 	n.group = core.NewNode()
-	bb := graphic.NewMesh(geometry.NewBox(16, 16, 16), WireframeMaterial)
-	n.group.Add(bb)
 	n.group.Add(n.mesh)
-	n.group.SetScale(lodMult, lodMult, lodMult)
-	n.group.SetPosition(float32(n.x), float32(n.y), float32(n.x))
-	scene.Add(n.group)
 
-	if n.children != nil {
-		for _, c := range n.children {
-			c.Render(scene)
-		}
-	}
+	bb := graphic.NewMesh(geometry.NewBox(16, 16, 16), WireframeMaterial)
+	bb.SetPosition(8, 8, 8)
+	n.group.Add(bb)
+
+	n.group.SetScale(float32(lodMult), float32(lodMult), float32(lodMult))
+	n.group.SetPosition(float32(n.x), float32(n.y), float32(n.z))
+	scene.Add(n.group)
 }
 
 type TransvoxelTerrainScene struct {
@@ -125,11 +137,8 @@ type TransvoxelTerrainScene struct {
 func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	scene := core.NewNode()
 
-	root := &TransvoxelNode{level: 2, x: 0, y: 0, z: 0}
+	root := &TransvoxelNode{level: 3, x: 0, y: 0, z: 0}
 	root.Expand()
-	for _, c := range root.children {
-		c.Expand()
-	}
 	root.Render(scene)
 
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)

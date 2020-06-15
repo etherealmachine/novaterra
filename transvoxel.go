@@ -5,7 +5,7 @@ import (
 	"github.com/g3n/engine/math32"
 )
 
-func corners(x, y, z int, voxels [19][19][19]int8) [8]int8 {
+func corners(x, y, z int, voxels *[19][19][19]int8) [8]int8 {
 	return [8]int8{
 		voxels[x][y][z],
 		voxels[x+1][y][z],
@@ -29,7 +29,7 @@ func transvoxelCase(x, y, z int, c [8]int8) uint8 {
 		int8((byte(c[7]) & 0x80)))
 }
 
-func generateTransvoxelMesh(x, y, z int, voxels [19][19][19]int8, maxIndex uint32, prevVertexCache [16][16][4]int32, currVertexCache [16][16][4]int32) ([]float32, []float32, []uint32) {
+func generateTransvoxelMesh(x, y, z int, voxels *[19][19][19]int8, maxIndex uint32, prevVertexCache *[17][17][4]int32, currVertexCache *[17][17][4]int32) ([]float32, []float32, []uint32) {
 	c := corners(x, y, z, voxels)
 	index := transvoxelCase(x, y, z, c)
 	if (index ^ uint8((byte(c[7])>>7)&0xFF)) == 0 {
@@ -132,24 +132,24 @@ func generateTransvoxelMesh(x, y, z int, voxels [19][19][19]int8, maxIndex uint3
 	return positions, normals, indices
 }
 
-func marchTransvoxels(voxels [19][19][19]int8) ([]float32, []float32, []uint32) {
+func marchTransvoxels(voxels *[19][19][19]int8) ([]float32, []float32, []uint32) {
 	var positions []float32
 	var normals []float32
 	var indices []uint32
-	var prevVertexCache [16][16][4]int32
-	var currVertexCache [16][16][4]int32
-	for x := 0; x < 16; x++ {
-		for z := 0; z < 16; z++ {
+	var prevVertexCache [17][17][4]int32
+	var currVertexCache [17][17][4]int32
+	for x := 0; x < 17; x++ {
+		for z := 0; z < 17; z++ {
 			for i := 0; i < 4; i++ {
 				prevVertexCache[x][z][i] = -1
 				currVertexCache[x][z][i] = -1
 			}
 		}
 	}
-	for y := 1; y < 16; y++ {
-		for x := 1; x < 16; x++ {
-			for z := 1; z < 16; z++ {
-				p, n, i := generateTransvoxelMesh(x, y, z, voxels, uint32(len(positions)/3), prevVertexCache, currVertexCache)
+	for y := 1; y <= 16; y++ {
+		for x := 1; x <= 16; x++ {
+			for z := 1; z <= 16; z++ {
+				p, n, i := generateTransvoxelMesh(x, y, z, voxels, uint32(len(positions)/3), &prevVertexCache, &currVertexCache)
 				positions = append(positions, p...)
 				normals = append(normals, n...)
 				indices = append(indices, i...)
