@@ -19,76 +19,99 @@ import (
 	"github.com/ojrac/opensimplex-go"
 )
 
-type TransvoxelChunk struct {
-	*core.Node
-
-	voxels  [][][]int8
-	x, y, z int
-	lod     int
-
-	mesh *graphic.Mesh
+type TransvoxelNode struct {
+	level    int
+	x, y, z  int
+	voxels   *[19][19][19]int8
+	mesh     *graphic.Mesh
+	group    *core.Node
+	children *[8]*TransvoxelNode
 }
 
-func (c *TransvoxelChunk) HandleVoxelClick(x, y, z int, shift bool) {
-	n, m, l := len(c.voxels), len(c.voxels[0]), len(c.voxels[0][0])
+func (n *TransvoxelNode) HandleVoxelClick(x, y, z int, shift bool) {
 	for ox := -1; ox <= 1; ox++ {
 		for oy := -1; oy <= 1; oy++ {
 			for oz := -1; oz <= 1; oz++ {
 				cx, cy, cz := x+ox, y+oy, z+oz
-				if cx >= 0 && cx < n && cy >= 0 && cy < m && cz >= 0 && cz < l {
-					if shift && c.voxels[cx][cy][cz] < 0 {
-						c.voxels[cx][cy][cz]++
-					} else if !shift && c.voxels[cx][cy][cz] > -127 {
-						c.voxels[cx][cy][cz]--
+				if cx >= 0 && cx < 16 && cy >= 0 && cy < 16 && cz >= 0 && cz < 16 {
+					if shift && n.voxels[cx][cy][cz] < 0 {
+						n.voxels[cx][cy][cz]++
+					} else if !shift && n.voxels[cx][cy][cz] > -127 {
+						n.voxels[cx][cy][cz]--
 					}
 				}
 			}
 		}
 	}
-	positions, normals, indices := marchTransvoxels(inflate(c.voxels))
+	positions, normals, indices := marchTransvoxels(*n.voxels)
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
 	geom.SetIndices(indices)
-	mesh := c.Children()[0].(*graphic.Mesh)
-	mat := mesh.GetMaterial(0)
-	mesh.Init(geom, mat)
+	n.mesh.Init(geom, n.mesh.GetMaterial(0))
 }
 
-func NewTransvoxelChunk(lod, x, y, z int) *TransvoxelChunk {
-	noise := opensimplex.NewNormalized32(0)
-	voxels := make([][][]int8, 16)
-	for i := 0; i < 16; i++ {
-		voxels[i] = make([][]int8, 16)
-		for j := 0; j < 16; j++ {
-			voxels[i][j] = make([]int8, 16)
+func (n *TransvoxelNode) Expand() {
+	lodMult := 1 << n.level
+	size := lodMult * 16
+	nextSize := (lodMult - 1) * 16
+	var children [8]*TransvoxelNode
+	for i := 0; i < 8; i++ {
+		o := NeighborOffsets[i]
+		ox, oy, oz := int(o[0]), int(o[1]), int(o[2])
+		children[i] = &TransvoxelNode{
+			level: n.level - 1,
+			x:     n.x*size + ox*nextSize,
+			y:     n.y*size + oy*nextSize,
+			z:     n.z*size + oz*nextSize,
 		}
 	}
-	for ox := 0; ox < 16; ox++ {
-		for oz := 0; oz < 16; oz++ {
-			height := 15*octaveNoise(noise, 16, float32(x*16+ox), 0, float32(z*16+oz), .5, 0.09) + 1
-			density := float32(-127)
-			deltaDensity := 256 / height
-			for oy := 0; oy < int(height); oy++ {
-				voxels[ox][oy][oz] = int8(density)
-				density += deltaDensity
+	n.children = &children
+}
+
+func (n *TransvoxelNode) Render(scene *core.Node) {
+	noise := opensimplex.NewNormalized32(0)
+	var voxels [19][19][19]int8
+	if n.y < 16 {
+		for ox := 0; ox < 19; ox++ {
+			for oz := 0; oz < 19; oz++ {
+				height := 15*octaveNoise(noise, 16, float32(n.x*16+ox), 0, float32(n.z*16+oz), .5, 0.09) + 1
+				density := float32(-127)
+				deltaDensity := 256 / height
+				for oy := 0; oy < int(height); oy++ {
+					voxels[ox][oy][oz] = int8(density)
+					density += deltaDensity
+				}
 			}
 		}
 	}
 
-	voxels = inflate(voxels)
+	n.voxels = &voxels
 	positions, normals, indices := marchTransvoxels(voxels)
-	m := NewFastMesh(positions, normals, indices)
-	group := core.NewNode()
-	group.Add(m)
-	group.SetPosition(float32(x)*16, float32(y)*16, float32(z)*16)
-	return &TransvoxelChunk{group, voxels, x, y, z, lod, m}
+	n.mesh = NewFastMesh(positions, normals, indices)
+	lodMult := float32(int(1 << n.level))
+	n.mesh.SetPosition(-8, -8, -8)
+
+	scene.Remove(n.group)
+	n.group = core.NewNode()
+	bb := graphic.NewMesh(geometry.NewBox(16, 16, 16), WireframeMaterial)
+	n.group.Add(bb)
+	n.group.Add(n.mesh)
+	n.group.SetScale(lodMult, lodMult, lodMult)
+	n.group.SetPosition(float32(n.x), float32(n.y), float32(n.x))
+	scene.Add(n.group)
+
+	if n.children != nil {
+		for _, c := range n.children {
+			c.Render(scene)
+		}
+	}
 }
 
 type TransvoxelTerrainScene struct {
 	*core.Node
 
-	chunks          []*TransvoxelChunk
+	root            *TransvoxelNode
 	cam             *camera.Camera
 	orbitCam, fpCam *camera.Camera
 	orbitControl    *camera.OrbitControl
@@ -102,14 +125,12 @@ type TransvoxelTerrainScene struct {
 func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	scene := core.NewNode()
 
-	var chunks []*TransvoxelChunk
-	for x := 0; x < 10; x++ {
-		for z := 0; z < 10; z++ {
-			chunk := NewTransvoxelChunk(0, x, 0, z)
-			scene.Add(chunk)
-			chunks = append(chunks, chunk)
-		}
+	root := &TransvoxelNode{level: 2, x: 0, y: 0, z: 0}
+	root.Expand()
+	for _, c := range root.children {
+		c.Expand()
 	}
+	root.Render(scene)
 
 	ambientLight := light.NewAmbient(&math32.Color{1.0, 1.0, 1.0}, 0.8)
 	scene.Add(ambientLight)
@@ -148,7 +169,6 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 		orbitCam:     orbitCam,
 		orbitControl: orbitControl,
 		fpCam:        fpCam,
-		chunks:       chunks,
 		fpsLabel:     fpsLabel,
 		mouseX:       float32(width) / 2,
 		mouseY:       float32(height) / 2,
@@ -249,23 +269,25 @@ func (s *TransvoxelTerrainScene) Update(renderer *renderer.Renderer, deltaTime t
 
 	s.velocity.Add((&math32.Vector3{0, -9.8, 0}).MultiplyScalar(float32(deltaTime.Seconds())))
 
-	chunkX, chunkZ := int(math32.Floor(pos.X/16)), int(math32.Floor(pos.Z/16))
-	if chunkX >= 0 && chunkX < 10 && chunkZ >= 0 && chunkZ < 10 {
-		chunk := s.chunks[chunkX+10*chunkZ]
+	/*
+		chunkX, chunkZ := int(math32.Floor(pos.X/16)), int(math32.Floor(pos.Z/16))
+		if chunkX >= 0 && chunkX < 10 && chunkZ >= 0 && chunkZ < 10 {
+			chunk := s.chunks[chunkX+10*chunkZ]
 
-		voxelX, voxelZ := int(math32.Mod(pos.X, 16)), int(math32.Mod(pos.Z, 16))
-		var height float32
-		for y := 15; y >= 0; y-- {
-			if chunk.voxels[voxelX][y][voxelZ] < 0 {
-				height = float32(y)
-				break
+			voxelX, voxelZ := int(math32.Mod(pos.X, 16)), int(math32.Mod(pos.Z, 16))
+			var height float32
+			for y := 15; y >= 0; y-- {
+				if chunk.voxels[voxelX][y][voxelZ] < 0 {
+					height = float32(y)
+					break
+				}
+			}
+			if pos.Y-10 <= height {
+				s.velocity = &math32.Vector3{}
+				pos.Y = height + 10
 			}
 		}
-		if pos.Y-10 <= height {
-			s.velocity = &math32.Vector3{}
-			pos.Y = height + 10
-		}
-	}
+	*/
 	s.fpCam.SetPositionVec(&pos)
 
 	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
