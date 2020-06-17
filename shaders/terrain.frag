@@ -1,105 +1,41 @@
+precision highp float;
+
+// Inputs from vertex shader
+in vec4 Position;     // Fragment position in camera coordinates
+in vec3 Normal;       // Fragment normal in camera coordinates
+in vec2 FragTexcoord; // Fragment texture coordinates
+
 #include <lights>
 #include <material>
 #include <phong_model>
 
-precision highp float;
-
-uniform float Resolution;
-uniform vec2 BrushPosition;
-uniform float BrushSize;
-uniform bool FlatNormal;
-uniform int Overlay;
-
-in vec4 Position;
-in vec3 Normal;
-in vec3 CamDir;
-in vec2 FragTexcoord;
-in float Height;
-in float WaterHeight;
-
+// Final fragment color
 out vec4 FragColor;
+
 void main() {
-	vec4 c1, c2;
-	float stop1, stop2, lerp;
-	if (Height < 0.1) {
-		c1 = texture(MatTexture[2], FragTexcoord * MatTexRepeat(2) + MatTexOffset(2));
-		c2 = texture(MatTexture[3], FragTexcoord * MatTexRepeat(3) + MatTexOffset(3));
-		stop1 = 0;
-		stop2 = 0.1;
-	} else if (Height < 1) {
-		c1 = texture(MatTexture[3], FragTexcoord * MatTexRepeat(3) + MatTexOffset(3));
-		c2 = texture(MatTexture[4], FragTexcoord * MatTexRepeat(4) + MatTexOffset(4));
-		stop1 = 0.1;
-		stop2 = 1;
-	} else if (Height < 10) {
-		c1 = texture(MatTexture[4], FragTexcoord * MatTexRepeat(4) + MatTexOffset(4));
-		c2 = texture(MatTexture[5], FragTexcoord * MatTexRepeat(5) + MatTexOffset(5));
-		stop1 = 1;
-		stop2 = 10;
-	} else if (Height < 25) {
-		c1 = texture(MatTexture[5], FragTexcoord * MatTexRepeat(5) + MatTexOffset(5));
-		c2 = texture(MatTexture[6], FragTexcoord * MatTexRepeat(6) + MatTexOffset(6));
-		stop1 = 10;
-		stop2 = 25;
-	} else if (Height < 30) {
-		c1 = texture(MatTexture[6], FragTexcoord * MatTexRepeat(6) + MatTexOffset(6));
-		c2 = texture(MatTexture[7], FragTexcoord * MatTexRepeat(7) + MatTexOffset(7));
-		stop1 = 25;
-		stop2 = 30;
-	} else {
-		c1 = texture(MatTexture[7], FragTexcoord * MatTexRepeat(7) + MatTexOffset(7));
-		c2 = texture(MatTexture[7], FragTexcoord * MatTexRepeat(7) + MatTexOffset(7));
-		stop1 = 30;
-		stop2 = 1000;
-	}
 
-	vec4 diffuse;
-	if (Height <= 0.1 || WaterHeight > 0) {
-		diffuse = texture(MatTexture[2], FragTexcoord * MatTexRepeat(2) + MatTexOffset(2));
-	} else {
-		lerp = (Height - stop1) / (stop2 - stop1);
-		diffuse = c1 * (1 - lerp) + c2 * lerp;
-	}
-	if (distance(BrushPosition, FragTexcoord) < BrushSize) {
-		diffuse *= 1.2;
-	}
+    // Combine material with texture colors
+    vec4 matDiffuse = vec4(0.0, 0.5, 0.0, 1.0);
+    vec4 matAmbient = vec4(0.0, 0.5, 0.0, 1.0);
 
-	vec3 normal = Normal;
-	if (FlatNormal) normal = normalize(cross(dFdx(Position).xyz, dFdy(Position).xyz));
+    // Normalize interpolated normal as it may have shrinked
+    vec3 fragNormal = normalize(Normal);
 
-	vec2 velocity = texture(MatTexture[0], FragTexcoord).zw;
-	float sediment = texture(MatTexture[10], FragTexcoord).x;
-	float capacity = texture(MatTexture[10], FragTexcoord).y;
-	float erosion  = texture(MatTexture[10], FragTexcoord).z;
-	float deposition = texture(MatTexture[10], FragTexcoord).w;
+    // Calculate the direction vector from the fragment to the camera (origin)
+    vec3 camDir = normalize(-Position.xyz);
 
-  float e = 1.0/Resolution;
-	vec4 flowOut = texture(MatTexture[8], FragTexcoord);
-	vec4 flowIn = vec4(
-		texture(MatTexture[8], vec2(FragTexcoord.x-e, FragTexcoord.y)).y,
-		texture(MatTexture[8], vec2(FragTexcoord.x+e, FragTexcoord.y)).x,
-		texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y-e)).w,
-		texture(MatTexture[8], vec2(FragTexcoord.x, FragTexcoord.y+e)).z
-	);
-  float deltaV = dot(flowIn, vec4(1)) - dot(flowOut, vec4(1));
-	if (Overlay == 1 && deltaV > 0) {
-		diffuse.r = deltaV / WaterHeight;
-	} else if (Overlay == 2 && WaterHeight > 0) {
-		diffuse.r = erosion;
-		diffuse.g = deposition;
-		diffuse.b = 0;
-	} else if (Overlay == 3 && WaterHeight > 0) {
-		diffuse.r = length(velocity);
-	}
+    // Workaround for gl_FrontFacing
+    vec3 fdx = dFdx(Position.xyz);
+    vec3 fdy = dFdy(Position.xyz);
+    vec3 faceNormal = normalize(cross(fdx,fdy));
+    if (dot(fragNormal, faceNormal) < 0.0) { // Back-facing
+        fragNormal = -fragNormal;
+    }
 
-	// Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
-	vec3 Ambdiff, Spec;
-	phongModel(Position, normal, CamDir, vec3(0.0), diffuse.rgb, Ambdiff, Spec);
+    // Calculates the Ambient+Diffuse and Specular colors for this fragment using the Phong model.
+    vec3 Ambdiff, Spec;
+    phongModel(Position, fragNormal, camDir, vec3(matAmbient), vec3(matDiffuse), Ambdiff, Spec);
 
-	if (Height > 0.1 && WaterHeight <= 0) {
-		Spec = vec3(0.0);
-	}
-
-	// Final fragment color
-	FragColor = min(vec4(Ambdiff + Spec, 1.0), vec4(1.0));
+    // Final fragment color
+    FragColor = min(vec4(Ambdiff + Spec, matDiffuse.a), vec4(1.0));
 }

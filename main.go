@@ -1,6 +1,9 @@
 package main
 
 import (
+	"io/ioutil"
+	"path/filepath"
+
 	"github.com/g3n/engine/app"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/text"
@@ -22,6 +25,20 @@ func main() {
 	font.SetFgColor(math32.NewColor4("White"))
 
 	a = app.App()
+
+	files, err := ioutil.ReadDir("shaders")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, f := range files {
+		b, err := ioutil.ReadFile(filepath.Join("shaders", f.Name()))
+		if err != nil {
+			panic(err)
+		}
+		a.Renderer().AddShader(f.Name(), string(b))
+	}
+	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
 
 	s := NewTransvoxelTerrainScene()
 	a.Run(s.Update)

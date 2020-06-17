@@ -92,11 +92,10 @@ func (n *TransvoxelNode) render(scene *core.Node) {
 	if n.y < 16 {
 		for ox := 0; ox < 19; ox++ {
 			for oz := 0; oz < 19; oz++ {
-				height := 15*octaveNoise(noise, 16, float32(n.x+ox*lodMult), 0, float32(n.z+oz*lodMult), .5, 0.09) + 1
+				height := 10*octaveNoise(noise, 16, float32(n.x-1+ox*lodMult), 0, float32(n.z-1+oz*lodMult), .5, 0.09) + 6
 				height /= float32(lodMult)
 				density := float32(-127)
 				deltaDensity := 256 / height
-				voxels[ox][0][oz] = -127
 				for oy := 1; oy < int(height); oy++ {
 					voxels[ox][oy][oz] = int8(density)
 					density += deltaDensity
@@ -106,7 +105,14 @@ func (n *TransvoxelNode) render(scene *core.Node) {
 	}
 	n.voxels = &voxels
 	positions, normals, indices := marchTransvoxels(n.voxels)
-	n.mesh = NewFastMesh(positions, normals, indices)
+	geom := geometry.NewGeometry()
+	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
+	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.SetIndices(indices)
+	mat := material.NewMaterial()
+	mat.SetShader("terrain")
+	n.mesh = graphic.NewMesh(geom, mat)
+	n.mesh.SetPosition(-1, -1, -1)
 	scene.Remove(n.group)
 	n.group = core.NewNode()
 	n.group.Add(n.mesh)
@@ -158,7 +164,7 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	scene.Add(orbitCam)
 
 	fpCam := camera.New(1)
-	fpCam.SetPosition(100, 100, 40)
+	fpCam.SetPosition(0, 0, 40)
 	scene.Add(fpCam)
 
 	width, height := a.GetFramebufferSize()
@@ -192,31 +198,7 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 
 func (s *TransvoxelTerrainScene) OnKeyPress(evname string, ev interface{}) {
 	e := ev.(*window.KeyEvent)
-	if s.cam == s.fpCam {
-		forward := &math32.Vector3{
-			-math32.Sin(s.yaw) * math32.Cos(s.pitch),
-			-math32.Sin(s.pitch),
-			-math32.Cos(s.yaw) * math32.Cos(s.pitch),
-		}
-		right := &math32.Vector3{
-			-math32.Cos(s.yaw),
-			0,
-			math32.Sin(s.yaw),
-		}
-		pos := s.fpCam.Position()
-		switch e.Key {
-		case window.KeyUp:
-			s.cam.SetPositionVec((&pos).Add(forward.Negate()))
-		case window.KeyDown:
-			s.cam.SetPositionVec((&pos).Add(forward))
-		case window.KeyLeft:
-			s.cam.SetPositionVec((&pos).Add(right.Negate()))
-		case window.KeyRight:
-			s.cam.SetPositionVec((&pos).Add(right))
-		case window.KeySpace:
-			s.velocity.Add(&math32.Vector3{0, 10, 0})
-		}
-	} else {
+	if s.cam == s.orbitCam {
 		switch e.Key {
 		case window.KeyUp:
 			s.orbitControl.Rotate(0, -s.orbitControl.KeyRotSpeed)
@@ -273,31 +255,32 @@ func (s *TransvoxelTerrainScene) OnMouseMove(evname string, ev interface{}) {
 func (s *TransvoxelTerrainScene) Update(renderer *renderer.Renderer, deltaTime time.Duration) {
 	s.fpsLabel.SetText(fmt.Sprintf("FPS: %.0f", 1/float64(deltaTime.Seconds())))
 
-	pos := s.fpCam.Position()
-	(&pos).Add(s.velocity.Clone().MultiplyScalar(float32(deltaTime.Seconds())))
-
-	s.velocity.Add((&math32.Vector3{0, -9.8, 0}).MultiplyScalar(float32(deltaTime.Seconds())))
-
-	/*
-		chunkX, chunkZ := int(math32.Floor(pos.X/16)), int(math32.Floor(pos.Z/16))
-		if chunkX >= 0 && chunkX < 10 && chunkZ >= 0 && chunkZ < 10 {
-			chunk := s.chunks[chunkX+10*chunkZ]
-
-			voxelX, voxelZ := int(math32.Mod(pos.X, 16)), int(math32.Mod(pos.Z, 16))
-			var height float32
-			for y := 15; y >= 0; y-- {
-				if chunk.voxels[voxelX][y][voxelZ] < 0 {
-					height = float32(y)
-					break
-				}
-			}
-			if pos.Y-10 <= height {
-				s.velocity = &math32.Vector3{}
-				pos.Y = height + 10
-			}
+	if s.cam == s.fpCam {
+		forward := &math32.Vector3{
+			-math32.Sin(s.yaw) * math32.Cos(s.pitch),
+			-math32.Sin(s.pitch),
+			-math32.Cos(s.yaw) * math32.Cos(s.pitch),
 		}
-	*/
-	s.fpCam.SetPositionVec(&pos)
+		right := &math32.Vector3{
+			-math32.Cos(s.yaw),
+			0,
+			math32.Sin(s.yaw),
+		}
+		pos := s.fpCam.Position()
+		ks := a.KeyState()
+		if ks.Pressed(window.KeyUp) {
+			s.cam.SetPositionVec((&pos).Add(forward.Negate()))
+		}
+		if ks.Pressed(window.KeyDown) {
+			s.cam.SetPositionVec((&pos).Add(forward))
+		}
+		if ks.Pressed(window.KeyLeft) {
+			s.cam.SetPositionVec((&pos).Add(right.Negate()))
+		}
+		if ks.Pressed(window.KeyRight) {
+			s.cam.SetPositionVec((&pos).Add(right))
+		}
+	}
 
 	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 	if err := renderer.Render(s, s.cam); err != nil {
