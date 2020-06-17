@@ -92,7 +92,7 @@ func (n *TransvoxelNode) render(scene *core.Node) {
 	if n.y < 16 {
 		for ox := 0; ox < 19; ox++ {
 			for oz := 0; oz < 19; oz++ {
-				height := 10*octaveNoise(noise, 16, float32(n.x-1+ox*lodMult), 0, float32(n.z-1+oz*lodMult), .5, 0.09) + 6
+				height := 10*octaveNoise(noise, 16, float32(n.x-1+ox*lodMult), 0, float32(n.z-1+oz*lodMult), .5, 0.09) + 1
 				height /= float32(lodMult)
 				density := float32(-127)
 				deltaDensity := 256 / height
@@ -105,17 +105,13 @@ func (n *TransvoxelNode) render(scene *core.Node) {
 	}
 	n.voxels = &voxels
 	positions, normals, indices := marchTransvoxels(n.voxels)
-	texcoords := make([]float32, len(positions)/3*2)
-	for i := 0; i < len(positions)/3; i++ {
-		texcoords[i*2] = positions[i*3] * float32(lodMult)
-		texcoords[i*2+1] = positions[i*3+2] * float32(lodMult)
-	}
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
-	geom.AddVBO(gls.NewVBO(texcoords).AddAttrib(gls.VertexTexcoord))
 	geom.SetIndices(indices)
 	mat := material.NewMaterial()
+	mat.AddTexture(textures["rock"])
+	mat.AddTexture(textures["grass2"])
 	mat.AddTexture(textures["grass"])
 	mat.SetShader("terrain")
 	n.mesh = graphic.NewMesh(geom, mat)

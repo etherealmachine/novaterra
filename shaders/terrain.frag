@@ -3,7 +3,10 @@ precision highp float;
 // Inputs from vertex shader
 in vec4 Position;     // Fragment position in camera coordinates
 in vec3 Normal;       // Fragment normal in camera coordinates
-in vec2 FragTexcoord; // Fragment texture coordinates
+in vec2 FragTexcoordX; // Fragment texture coordinates
+in vec2 FragTexcoordY; // Fragment texture coordinates
+in vec2 FragTexcoordZ; // Fragment texture coordinates
+in vec3 TexBlend;
 
 #include <lights>
 #include <material>
@@ -15,8 +18,13 @@ out vec4 FragColor;
 void main() {
 
     // Combine material with texture colors
-    vec4 matDiffuse = texture(MatTexture[0], FragTexcoord * MatTexRepeat(0) + MatTexOffset(0));
-    vec4 matAmbient = texture(MatTexture[0], FragTexcoord * MatTexRepeat(0) + MatTexOffset(0));
+    vec4 matDiffuse1 = texture(MatTexture[0], FragTexcoordX * MatTexRepeat(0) + MatTexOffset(0));
+    vec4 matDiffuse2 = texture(MatTexture[1], FragTexcoordY * MatTexRepeat(0) + MatTexOffset(0));
+    vec4 matDiffuse3 = texture(MatTexture[2], FragTexcoordZ * MatTexRepeat(0) + MatTexOffset(0));
+
+    vec4 matDiffuse = TexBlend.x * matDiffuse1 + TexBlend.y * matDiffuse2 + TexBlend.z * matDiffuse3;
+
+    vec4 matAmbient = matDiffuse;
 
     // Normalize interpolated normal as it may have shrinked
     vec3 fragNormal = normalize(Normal);
