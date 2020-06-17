@@ -5,13 +5,16 @@ import (
 	"path/filepath"
 
 	"github.com/g3n/engine/app"
+	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/text"
+	"github.com/g3n/engine/texture"
 )
 
 var (
-	a    *app.Application
-	font *text.Font
+	a        *app.Application
+	font     *text.Font
+	textures map[string]*texture.Texture2D
 )
 
 func main() {
@@ -39,6 +42,17 @@ func main() {
 		a.Renderer().AddShader(f.Name(), string(b))
 	}
 	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
+
+	textures = make(map[string]*texture.Texture2D)
+	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {
+		tex, err := texture.NewTexture2DFromImage(filepath.Join("textures", f) + ".jpg")
+		if err != nil {
+			panic(err)
+		}
+		tex.SetWrapS(gls.REPEAT)
+		tex.SetWrapT(gls.REPEAT)
+		textures[f] = tex
+	}
 
 	s := NewTransvoxelTerrainScene()
 	a.Run(s.Update)

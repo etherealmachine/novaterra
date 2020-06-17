@@ -15,8 +15,8 @@ out vec4 FragColor;
 void main() {
 
     // Combine material with texture colors
-    vec4 matDiffuse = vec4(0.0, 0.5, 0.0, 1.0);
-    vec4 matAmbient = vec4(0.0, 0.5, 0.0, 1.0);
+    vec4 matDiffuse = texture(MatTexture[0], FragTexcoord * MatTexRepeat(0) + MatTexOffset(0));
+    vec4 matAmbient = texture(MatTexture[0], FragTexcoord * MatTexRepeat(0) + MatTexOffset(0));
 
     // Normalize interpolated normal as it may have shrinked
     vec3 fragNormal = normalize(Normal);

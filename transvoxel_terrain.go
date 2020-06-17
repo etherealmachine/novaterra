@@ -105,11 +105,18 @@ func (n *TransvoxelNode) render(scene *core.Node) {
 	}
 	n.voxels = &voxels
 	positions, normals, indices := marchTransvoxels(n.voxels)
+	texcoords := make([]float32, len(positions)/3*2)
+	for i := 0; i < len(positions)/3; i++ {
+		texcoords[i*2] = positions[i*3] * float32(lodMult)
+		texcoords[i*2+1] = positions[i*3+2] * float32(lodMult)
+	}
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
+	geom.AddVBO(gls.NewVBO(texcoords).AddAttrib(gls.VertexTexcoord))
 	geom.SetIndices(indices)
 	mat := material.NewMaterial()
+	mat.AddTexture(textures["grass"])
 	mat.SetShader("terrain")
 	n.mesh = graphic.NewMesh(geom, mat)
 	n.mesh.SetPosition(-1, -1, -1)
