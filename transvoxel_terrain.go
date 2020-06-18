@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
+	"github.com/g3n/engine/experimental/collision"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/graphic"
@@ -85,6 +87,25 @@ func (n *TransvoxelNode) Render(scene *core.Node) {
 	}
 }
 
+func (n *TransvoxelNode) Cast(caster *collision.Raycaster) (*TransvoxelNode, []collision.Intersect) {
+	size := float32(int(1) << n.level * 16)
+	minX, minY, minZ := float32(n.x), float32(n.y), float32(n.z)
+	if !caster.IsIntersectionBox(&math32.Box3{Min: math32.Vector3{minX, minY, minZ}, Max: math32.Vector3{minX + size, minY + size, minZ + size}}) {
+		return nil, nil
+	}
+	if n.mesh != nil {
+		return n, caster.IntersectObject(n.mesh, false)
+	}
+	if n.children != nil {
+		for _, c := range n.children {
+			if hit, intersects := c.Cast(caster); hit != nil {
+				return hit, intersects
+			}
+		}
+	}
+	return n, nil
+}
+
 func (n *TransvoxelNode) render(scene *core.Node) {
 	lodMult := 1 << n.level
 	noise := opensimplex.NewNormalized32(0)
@@ -138,6 +159,7 @@ type TransvoxelTerrainScene struct {
 	orbitControl    *camera.OrbitControl
 	pitch, yaw      float32
 	mouseX, mouseY  float32
+	mouseDown       bool
 	fpsLabel        *gui.Label
 
 	velocity *math32.Vector3
@@ -183,6 +205,7 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 
 	s := &TransvoxelTerrainScene{
 		Node:         scene,
+		root:         root,
 		cam:          orbitCam,
 		orbitCam:     orbitCam,
 		orbitControl: orbitControl,
@@ -196,6 +219,8 @@ func NewTransvoxelTerrainScene() *TransvoxelTerrainScene {
 	a.SubscribeID(window.OnKeyDown, a, s.OnKeyPress)
 	a.SubscribeID(window.OnKeyRepeat, a, s.OnKeyPress)
 	a.SubscribeID(window.OnCursor, a, s.OnMouseMove)
+	a.SubscribeID(window.OnMouseDown, a, s.OnMouseDown)
+	a.SubscribeID(window.OnMouseUp, a, s.OnMouseUp)
 	return s
 }
 
@@ -224,6 +249,14 @@ func (s *TransvoxelTerrainScene) OnKeyPress(evname string, ev interface{}) {
 			window.Get().(*window.GlfwWindow).SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 		}
 	}
+}
+
+func (s *TransvoxelTerrainScene) OnMouseDown(evname string, ev interface{}) {
+	s.mouseDown = true
+}
+
+func (s *TransvoxelTerrainScene) OnMouseUp(evname string, ev interface{}) {
+	s.mouseDown = false
 }
 
 func (s *TransvoxelTerrainScene) OnMouseMove(evname string, ev interface{}) {
@@ -283,6 +316,16 @@ func (s *TransvoxelTerrainScene) Update(renderer *renderer.Renderer, deltaTime t
 		if ks.Pressed(window.KeyRight) {
 			s.cam.SetPositionVec((&pos).Add(right))
 		}
+	}
+
+	if s.mouseDown {
+		width, height := a.GetSize()
+		x := 2*(s.mouseX/float32(width)) - 1
+		y := -2*(s.mouseY/float32(height)) + 1
+		caster := collision.NewRaycaster(&math32.Vector3{}, &math32.Vector3{})
+		caster.SetFromCamera(s.cam, x, y)
+		_, intersects := s.root.Cast(caster)
+		log.Println(intersects)
 	}
 
 	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
