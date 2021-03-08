@@ -54,6 +54,6 @@ func main() {
 		textures[f] = tex
 	}
 
-	s := NewTransvoxelTerrainScene()
+	s := NewWorldScene()
 	a.Run(s.Update)
 }
