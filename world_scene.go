@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/g3n/engine/util/helper"
 	"github.com/g3n/engine/window"
 	"github.com/go-gl/glfw/v3.2/glfw"
+	"github.com/gonum/blas"
+	"github.com/gonum/lapack/native"
 )
 
 type WorldScene struct {
@@ -32,51 +35,115 @@ type Chunk struct {
 	*core.Node
 	x      int64
 	y      int64
-	blocks [16][256][16]float64
+	blocks [16][256][16]float32
 }
 
-func (c *Chunk) f(x, y, z int) float64 {
-	if x >= 0 && x < 16 && y >= 0 && y < 256 && z >= 0 && z < 16 {
-		return c.blocks[x][y][z]
+func (c *Chunk) f(x, y, z float32) float32 {
+	if x < 0 || x >= 16 || y < 0 || y >= 256 || z < 0 || z >= 16 {
+		return 0
 	}
-	return 0
+	return c.blocks[int(x)][int(y)][int(z)]
+	/*
+		x -= 10
+		y -= 10
+		z -= 10
+		return 5 - float32(math.Sqrt(float64(x*x+y*y+z*z)))
+	*/
 }
 
-func (c *Chunk) findBestVertex(x, y, z int) *math32.Vector3 {
-	var v [2][2][2]float64
+func (c *Chunk) fNormal(x, y, z float32) *math32.Vector3 {
+	d := float32(0.01)
+	n := &math32.Vector3{
+		X: -(c.f(x+d, y, z) - c.f(x-d, y, z)) / 2 / d,
+		Y: -(c.f(x, y+d, z) - c.f(x, y-d, z)) / 2 / d,
+		Z: -(c.f(x, y, z+d) - c.f(x, y, z-d)) / 2 / d,
+	}
+	return n.Normalize()
+}
+
+func adapt(v0 float32, v1 float32) float32 {
+	// v0 and v1 are numbers of opposite sign. This returns how far you need to interpolate from v0 to v1 to get to 0.
+	if (v0 > 0) == (v1 > 0) {
+		log.Fatalf("v0 and v1 do not have opposite sign %.2f %.2f", v0, v1)
+	}
+	return (0 - v0) / (v1 - v0)
+}
+
+func solveQuadraticErrorFunction(x, y, z float32, positions []*math32.Vector3, normals []*math32.Vector3) *math32.Vector3 {
+	a := make([]float64, len(positions)*3)
+	b := make([]float64, len(positions))
+	for i := 0; i < len(positions); i++ {
+		v := positions[i]
+		n := normals[i]
+		a[i*3] = float64(n.X)
+		a[i*3+1] = float64(n.Y)
+		a[i*3+2] = float64(n.Z)
+		b[i] = float64(v.X*n.X + v.Y*n.Y + v.Z*n.Z)
+	}
+	var impl native.Implementation
+	m := len(a) / 3
+	n := 3
+	nrhs := 1
+	lda := n
+	ldb := 1
+	work := []float64{0}
+	success := impl.Dgels(blas.NoTrans, m, n, nrhs, a, lda, b, ldb, work, -1)
+	if !success {
+		log.Fatal("failed")
+	}
+	work = make([]float64, int(work[0]))
+	success = impl.Dgels(blas.NoTrans, m, n, nrhs, a, lda, b, ldb, work, len(work))
+	if !success {
+		return &math32.Vector3{X: x + 0.5, Y: y + 0.5, Z: z + 0.5}
+	}
+	return &math32.Vector3{
+		X: math32.Clamp(float32(b[0]), x, x+1),
+		Y: math32.Clamp(float32(b[1]), y, y+1),
+		Z: math32.Clamp(float32(b[2]), z, z+1),
+	}
+}
+
+func (c *Chunk) findBestVertex(x, y, z float32) *math32.Vector3 {
+	var v [2][2][2]float32
 	for dx := 0; dx <= 1; dx++ {
 		for dy := 0; dy <= 1; dy++ {
 			for dz := 0; dz <= 1; dz++ {
-				v[dx][dy][dz] = c.f(x+dx, y+dy, z+dz)
+				v[dx][dy][dz] = c.f(x+float32(dx), y+float32(dy), z+float32(dz))
 			}
 		}
 	}
-	changes := 0
+	var changes []*math32.Vector3
 	for dx := 0; dx <= 1; dx++ {
 		for dy := 0; dy <= 1; dy++ {
 			if (v[dx][dy][0] > 0) != (v[dx][dy][1] > 0) {
-				changes++
+				changes = append(changes, &math32.Vector3{X: x + float32(dx), Y: y + float32(dy), Z: z + adapt(v[dx][dy][0], v[dx][dy][1])})
 			}
 		}
 	}
 	for dx := 0; dx <= 1; dx++ {
 		for dz := 0; dz <= 1; dz++ {
 			if (v[dx][0][dz] > 0) != (v[dx][1][dz] > 0) {
-				changes++
+				changes = append(changes, &math32.Vector3{X: x + float32(dx), Y: y + adapt(v[dx][0][dz], v[dx][1][dz]), Z: z + float32(dz)})
 			}
 		}
 	}
 	for dy := 0; dy <= 1; dy++ {
 		for dz := 0; dz <= 1; dz++ {
 			if (v[0][dy][dz] > 0) != (v[1][dy][dz] > 0) {
-				changes++
+				changes = append(changes, &math32.Vector3{X: x + adapt(v[0][dy][dz], v[1][dy][dz]), Y: y + float32(dy), Z: z + float32(dz)})
 			}
 		}
 	}
-	if changes <= 1 {
+	if len(changes) <= 1 {
 		return nil
 	}
-	return &math32.Vector3{X: float32(x) + 0.5, Y: float32(y) + 0.5, Z: float32(z) + 0.5}
+
+	var normals []*math32.Vector3
+	for _, v := range changes {
+		normals = append(normals, c.fNormal(v.X, v.Y, v.Z))
+	}
+
+	return solveQuadraticErrorFunction(x, y, z, changes, normals)
 }
 
 func (c *Chunk) Generate(mat material.IMaterial) {
@@ -89,7 +156,7 @@ func (c *Chunk) Generate(mat material.IMaterial) {
 	for x := -1; x <= 16; x++ {
 		for y := -1; y <= 256; y++ {
 			for z := -1; z <= 16; z++ {
-				v := c.findBestVertex(x, y, z)
+				v := c.findBestVertex(float32(x), float32(y), float32(z))
 				if v == nil {
 					continue
 				}
@@ -103,19 +170,20 @@ func (c *Chunk) Generate(mat material.IMaterial) {
 				positions = append(positions, v.X)
 				positions = append(positions, v.Y)
 				positions = append(positions, v.Z)
-				normals = append(normals, 0)
-				normals = append(normals, 1)
-				normals = append(normals, 0)
+				normal := c.fNormal(float32(x), float32(y), float32(z))
+				normals = append(normals, normal.X)
+				normals = append(normals, normal.Y)
+				normals = append(normals, normal.Z)
 			}
 		}
 	}
 	for x := -1; x <= 16; x++ {
 		for y := -1; y <= 256; y++ {
 			for z := -1; z <= 16; z++ {
-				solid := c.f(x, y, z) > 0
-				solidX := c.f(x+1, y, z) > 0
-				solidY := c.f(x, y+1, z) > 0
-				solidZ := c.f(x, y, z+1) > 0
+				solid := c.f(float32(x), float32(y), float32(z)) > 0
+				solidX := c.f(float32(x+1), float32(y), float32(z)) > 0
+				solidY := c.f(float32(x), float32(y+1), float32(z)) > 0
+				solidZ := c.f(float32(x), float32(y), float32(z+1)) > 0
 				if solid != solidX {
 					if solidX {
 						indices = append(indices, vertIndices[x][y-1][z-1])
@@ -171,6 +239,23 @@ func (c *Chunk) Generate(mat material.IMaterial) {
 		}
 	}
 
+	{
+		g := geometry.NewGeometry()
+		var vertices []float32
+		for i := 0; i < len(positions)/3; i++ {
+			vertices = append(vertices, positions[i*3])
+			vertices = append(vertices, positions[i*3+1])
+			vertices = append(vertices, positions[i*3+2])
+			vertices = append(vertices, positions[i*3]+normals[i*3])
+			vertices = append(vertices, positions[i*3+1]+normals[i*3+1])
+			vertices = append(vertices, positions[i*3+2]+normals[i*3+2])
+		}
+		g.AddVBO(gls.NewVBO(vertices).AddAttrib(gls.VertexPosition))
+		mat := material.NewStandard(&math32.Color{R: 1, G: 1, B: 1})
+		mat.SetLineWidth(1)
+		c.Add(graphic.NewLines(g, mat))
+	}
+
 	geom := geometry.NewGeometry()
 	geom.AddVBO(gls.NewVBO(positions).AddAttrib(gls.VertexPosition))
 	geom.AddVBO(gls.NewVBO(normals).AddAttrib(gls.VertexNormal))
@@ -179,35 +264,15 @@ func (c *Chunk) Generate(mat material.IMaterial) {
 	c.Add(mesh)
 }
 
-type PointLightMesh struct {
-	*graphic.Mesh
-	Light *light.Point
-}
-
-func NewPointLightMesh(color *math32.Color, x, y, z float32) *PointLightMesh {
-
-	l := new(PointLightMesh)
-
-	geom := geometry.NewSphere(0.05, 16, 8)
-	mat := material.NewStandard(color)
-	mat.SetUseLights(0)
-	mat.SetEmissiveColor(color)
-	l.Mesh = graphic.NewMesh(geom, mat)
-	l.Mesh.SetVisible(true)
-	l.Mesh.SetPosition(x, y, z)
-
-	l.Light = light.NewPoint(color, 1.0)
-	l.Light.SetLinearDecay(1)
-	l.Light.SetQuadraticDecay(1)
-	l.Light.SetVisible(true)
-
-	l.Mesh.Add(l.Light)
-
-	return l
-}
-
 func NewWorldScene() *WorldScene {
 	scene := core.NewNode()
+
+	l := light.NewAmbient(math32.NewColor("white"), 0.1)
+	scene.Add(l)
+
+	l2 := light.NewDirectional(math32.NewColor("white"), 0.8)
+	l2.SetPosition(1, 1, 1)
+	scene.Add(l2)
 
 	cam := camera.New(1)
 	cam.SetPosition(32, 32, 32)
@@ -219,27 +284,6 @@ func NewWorldScene() *WorldScene {
 
 	axes := helper.NewAxes(16)
 	scene.Add(axes)
-
-	/*
-		l := light.NewDirectional(&math32.Color{R: 1, G: 0, B: 0}, 0.8)
-		l.SetDirection(1, 0, 0)
-		l.SetVisible(true)
-		scene.Add(l)
-		l = light.NewDirectional(&math32.Color{R: 0, G: 1, B: 0}, 0.8)
-		l.SetDirection(0, 1, 0)
-		l.SetVisible(true)
-		scene.Add(l)
-		l = light.NewDirectional(&math32.Color{R: 0, G: 0, B: 1}, 0.8)
-		l.SetDirection(0, 0, 1)
-		l.SetVisible(true)
-		scene.Add(l)
-
-		l2 := light.NewPoint(&math32.Color{R: 1, G: 1, B: 1}, 1.0)
-		l2.SetPosition(0, 20, 0)
-		l2.SetLinearDecay(1)
-		l2.SetQuadraticDecay(1)
-		l2.SetVisible(true)
-	*/
 
 	chunks := make(map[int64]map[int64]*Chunk)
 	chunks[0] = make(map[int64]*Chunk)
@@ -261,8 +305,6 @@ func NewWorldScene() *WorldScene {
 	}
 
 	mat := material.NewMaterial()
-	mat.AddTexture(textures["rock"])
-	mat.AddTexture(textures["grass2"])
 	mat.AddTexture(textures["grass"])
 	mat.SetShader("terrain")
 
