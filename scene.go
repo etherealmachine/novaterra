@@ -1,17 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/g3n/engine/camera"
 	"github.com/g3n/engine/core"
-	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
-	"github.com/g3n/engine/graphic"
 	"github.com/g3n/engine/light"
-	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/util/helper"
@@ -46,43 +42,11 @@ func NewScene() *Scene {
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
 	cam.SetAspect(float32(width) / float32(height))
 
-	axes := helper.NewAxes(16)
+	axes := helper.NewAxes(32)
 	scene.Add(axes)
 
 	chunk := NewChunk()
 	scene.Add(chunk.Mesh())
-
-	mesh := graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(0, 0, 0)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(0, 0, 32)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(32, 0, 0)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(32, 0, 32)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(0, 32, 0)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(0, 32, 32)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(32, 32, 0)
-	scene.Add(mesh)
-
-	mesh = graphic.NewMesh(geometry.NewCube(1), material.NewStandard(math32.NewColor("white")))
-	mesh.SetPosition(32, 32, 32)
-	scene.Add(mesh)
 
 	s := &Scene{
 		Node:   scene,
@@ -102,7 +66,7 @@ func NewScene() *Scene {
 
 func (s *Scene) OnMouseMove(evname string, ev interface{}) {
 	e := ev.(*window.CursorEvent)
-	if s.mouseX >= 0 && s.mouseY >= 0 {
+	if s.mouseX >= 0 || s.mouseY >= 0 {
 		s.yaw -= math32.DegToRad(0.1 * (s.mouseX - e.Xpos))
 		s.pitch += math32.DegToRad(0.1 * (s.mouseY - e.Ypos))
 		s.pitch = math32.Clamp(s.pitch, math32.DegToRad(-89), math32.DegToRad(89))
@@ -150,7 +114,6 @@ func (s *Scene) Update(renderer *renderer.Renderer, deltaTime time.Duration) {
 		(&pos).Clone().Add(forward),
 		up,
 	)
-	fmt.Printf("%.2f, %.2f, %.2f, yaw: %.2f, pitch: %.2f\n", pos.X, pos.Y, pos.Z, s.yaw, s.pitch)
 
 	a.Gls().Clear(gls.DEPTH_BUFFER_BIT | gls.STENCIL_BUFFER_BIT | gls.COLOR_BUFFER_BIT)
 	if err := renderer.Render(s, s.cam); err != nil {

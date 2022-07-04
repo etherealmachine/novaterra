@@ -27,7 +27,7 @@ func NewChunk() *Chunk {
 	for x := 0; x < 32; x++ {
 		for y := 0; y < 32; y++ {
 			for z := 0; z < 32; z++ {
-				if y >= 4 {
+				if y >= 2+rand.Intn(6) || (y > 0 && c.data[x][y-1][z] == 0) {
 					continue
 				}
 				if y == 0 {
@@ -54,36 +54,90 @@ func (c *Chunk) Geom() geometry.IGeometry {
 			for z := 0; z < 32; z++ {
 				if c.data[x][y][z] != 0 {
 					xf := float32(x)
-					yf := float32(x)
-					zf := float32(x)
+					yf := float32(y)
+					zf := float32(z)
+
+					i := uint32(len(positions) / 3)
+					// 0, 0, 0
 					positions = append(positions, xf)
 					positions = append(positions, yf)
 					positions = append(positions, zf)
-					positions = append(positions, xf+1)
-					positions = append(positions, yf)
-					positions = append(positions, zf)
+					// 0, 0, 1
 					positions = append(positions, xf)
 					positions = append(positions, yf)
 					positions = append(positions, zf+1)
+					// 1, 0, 0
+					positions = append(positions, xf+1)
+					positions = append(positions, yf)
+					positions = append(positions, zf)
+					// 1, 0, 1
 					positions = append(positions, xf+1)
 					positions = append(positions, yf)
 					positions = append(positions, zf+1)
+					// 0, 1, 0
 					positions = append(positions, xf)
 					positions = append(positions, yf+1)
 					positions = append(positions, zf)
-					positions = append(positions, xf+1)
-					positions = append(positions, yf+1)
-					positions = append(positions, zf)
+					// 0, 1, 1
 					positions = append(positions, xf)
 					positions = append(positions, yf+1)
 					positions = append(positions, zf+1)
+					// 1, 1, 0
+					positions = append(positions, xf+1)
+					positions = append(positions, yf+1)
+					positions = append(positions, zf)
+					// 1, 1, 1
 					positions = append(positions, xf+1)
 					positions = append(positions, yf+1)
 					positions = append(positions, zf+1)
-					i := uint32(len(indices))
+
+					// bottom
 					indices = append(indices, i+0)
+					indices = append(indices, i+2)
+					indices = append(indices, i+1)
 					indices = append(indices, i+1)
 					indices = append(indices, i+2)
+					indices = append(indices, i+3)
+
+					// top
+					indices = append(indices, i+4)
+					indices = append(indices, i+5)
+					indices = append(indices, i+6)
+					indices = append(indices, i+6)
+					indices = append(indices, i+5)
+					indices = append(indices, i+7)
+
+					// front
+					indices = append(indices, i+5)
+					indices = append(indices, i+1)
+					indices = append(indices, i+7)
+					indices = append(indices, i+7)
+					indices = append(indices, i+1)
+					indices = append(indices, i+3)
+
+					// back
+					indices = append(indices, i+4)
+					indices = append(indices, i+6)
+					indices = append(indices, i+0)
+					indices = append(indices, i+0)
+					indices = append(indices, i+6)
+					indices = append(indices, i+2)
+
+					// left
+					indices = append(indices, i+0)
+					indices = append(indices, i+1)
+					indices = append(indices, i+4)
+					indices = append(indices, i+4)
+					indices = append(indices, i+1)
+					indices = append(indices, i+5)
+
+					// right
+					indices = append(indices, i+3)
+					indices = append(indices, i+2)
+					indices = append(indices, i+7)
+					indices = append(indices, i+7)
+					indices = append(indices, i+2)
+					indices = append(indices, i+6)
 				}
 			}
 		}
