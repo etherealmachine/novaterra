@@ -54,6 +54,6 @@ func main() {
 		textures[f] = tex
 	}
 
-	s := NewWorldScene()
+	s := NewScene()
 	a.Run(s.Update)
 }
