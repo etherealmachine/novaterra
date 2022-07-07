@@ -31,7 +31,7 @@ func NewScene() *Scene {
 	scene.Add(l)
 
 	l2 := light.NewDirectional(math32.NewColor("white"), 0.8)
-	l2.SetPosition(1, 1, 1)
+	l2.SetPosition(100, 200, 400)
 	scene.Add(l2)
 
 	cam := camera.New(1)
