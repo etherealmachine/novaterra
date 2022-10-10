@@ -328,5 +328,5 @@ func (c *Chunk) Mesh() graphic.IGraphic {
 	mat := material.NewStandard(math32.NewColor("white"))
 	mat.AddTexture(textures["dirt"])
 	mat.SetShader("terrain")
-	return graphic.NewMesh(c.GreedyGeom(), mat)
+	return graphic.NewMesh(c.CulledGeom(), mat)
 }
