@@ -13,6 +13,7 @@ import (
 	"github.com/g3n/engine/util/helper"
 	"github.com/g3n/engine/window"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/ojrac/opensimplex-go"
 )
 
 type Scene struct {
@@ -45,8 +46,21 @@ func NewScene() *Scene {
 	axes := helper.NewAxes(32)
 	scene.Add(axes)
 
-	chunk := NewChunk()
-	scene.Add(chunk.Mesh())
+	//chunk := NewChunk()
+	//scene.Add(chunk.Mesh())
+
+	tree := NewTree(math32.Vector3{X: 0, Y: 0, Z: 0}, 32)
+	noise := opensimplex.New32(0)
+	for x := 0; x < 32; x++ {
+		for z := 0; z < 32; z++ {
+			height := int(((noise.Eval3(float32(x), 0, float32(z)) + 1) / 2) * 16)
+			for y := 0; y < height; y++ {
+				node := tree.At(float32(x-16), float32(y-16), float32(z-16))
+				node.Material = 1
+			}
+		}
+	}
+	scene.Add(tree.Node())
 
 	s := &Scene{
 		Node:   scene,
