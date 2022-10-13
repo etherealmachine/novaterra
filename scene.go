@@ -23,6 +23,8 @@ type Scene struct {
 
 	pitch, yaw     float32
 	mouseX, mouseY float32
+
+	mat *Material
 }
 
 func NewScene() *Scene {
@@ -49,6 +51,8 @@ func NewScene() *Scene {
 	//chunk := NewChunk()
 	//scene.Add(chunk.Mesh())
 
+	mat := NewMaterial()
+
 	tree := NewTree(math32.Vector3{X: 0, Y: 0, Z: 0}, 32)
 	noise := opensimplex.New32(0)
 	for x := 0; x < 32; x++ {
@@ -60,7 +64,7 @@ func NewScene() *Scene {
 			}
 		}
 	}
-	scene.Add(tree.Node())
+	scene.Add(tree.Node(mat))
 
 	s := &Scene{
 		Node:   scene,
@@ -69,6 +73,7 @@ func NewScene() *Scene {
 		pitch:  -0.81,
 		mouseX: -1,
 		mouseY: -1,
+		mat:    mat,
 	}
 	a.SubscribeID(window.OnCursor, a, s.OnMouseMove)
 	a.SubscribeID(window.OnKeyDown, a, s.OnKeyDown)
@@ -94,7 +99,10 @@ func (s *Scene) OnKeyDown(evname string, ev interface{}) {
 	if e.Key == window.KeyEscape {
 		os.Exit(0)
 	} else if e.Key == window.KeyW {
-
+		s.mat.Mode++
+		if s.mat.Mode >= 3 {
+			s.mat.Mode = 0
+		}
 	}
 }
 

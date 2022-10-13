@@ -6,7 +6,6 @@ import (
 	"github.com/g3n/engine/core"
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/graphic"
-	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
 )
 
@@ -90,15 +89,12 @@ func (n *Node) merge() {
 	}
 }
 
-func (n *Node) Node() core.INode {
+func (n *Node) Node(mat *Material) core.INode {
 	root := core.NewNode()
 	n.merge()
 	n.DFS(func(n *Node, _ int) bool {
 		if n.Material != 0 {
 			g := geometry.NewCube(n.Size)
-			mat := material.NewStandard(math32.NewColor("white"))
-			mat.AddTexture(textures["dirt"])
-			mat.SetShader("wireframe")
 			m := graphic.NewMesh(g, mat)
 			m.SetPositionVec(&n.Position)
 			root.Add(m)
