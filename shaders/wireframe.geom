@@ -10,6 +10,7 @@ out vec4 Position;
 out vec3 Normal;
 out vec3 WorldPosition;
 out vec3 WorldNormal;
+noperspective out vec3 Vertex;
  
 void main()
 {
@@ -22,6 +23,7 @@ void main()
   Normal = vNormal[0];
   WorldPosition = vWorldPosition[0];
   WorldNormal = vWorldNormal[0];
+  Vertex = vec3(1, 0, 0);
   EmitVertex();
 
   gl_Position = p1;
@@ -29,6 +31,7 @@ void main()
   Normal = vNormal[1];
   WorldPosition = vWorldPosition[1];
   WorldNormal = vWorldNormal[1];
+  Vertex = vec3(0, 1, 0);
   EmitVertex();
 
   gl_Position = p2;
@@ -36,6 +39,7 @@ void main()
   Normal = vNormal[2];
   WorldPosition = vWorldPosition[2];
   WorldNormal = vWorldNormal[2];
+  Vertex = vec3(0, 0, 1);
   EmitVertex();
  
   EndPrimitive();
