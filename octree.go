@@ -98,7 +98,7 @@ func (n *Node) Node() core.INode {
 			g := geometry.NewCube(n.Size)
 			mat := material.NewStandard(math32.NewColor("white"))
 			mat.AddTexture(textures["dirt"])
-			mat.SetShader("terrain")
+			mat.SetShader("wireframe")
 			m := graphic.NewMesh(g, mat)
 			m.SetPositionVec(&n.Position)
 			root.Add(m)

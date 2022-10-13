@@ -41,7 +41,8 @@ func main() {
 		}
 		a.Renderer().AddShader(f.Name(), string(b))
 	}
-	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag")
+	a.Renderer().AddProgram("terrain", "terrain.vert", "terrain.frag", "wireframe.geom")
+	a.Renderer().AddProgram("wireframe", "terrain.vert", "terrain.frag", "wireframe.geom")
 
 	textures = make(map[string]*texture.Texture2D)
 	for _, f := range []string{"water", "dirt", "grass", "grass2", "rock", "snow"} {

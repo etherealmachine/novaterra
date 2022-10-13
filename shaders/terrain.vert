@@ -7,19 +7,19 @@ uniform mat4 MVP;
 
 #include <material>
 
-// Output variables for Fragment shader
-out vec4 Position;
-out vec3 Normal;
-out vec3 WorldPosition;
-out vec3 WorldNormal;
+// Output variables for Geometry shader
+out vec4 vPosition;
+out vec3 vNormal;
+out vec3 vWorldPosition;
+out vec3 vWorldNormal;
 
 void main() {
-    WorldPosition = VertexPosition;
-    WorldNormal = VertexNormal;
+    vWorldPosition = VertexPosition;
+    vWorldNormal = VertexNormal;
     // Transform vertex position to camera coordinates
-    Position = ModelViewMatrix * vec4(VertexPosition, 1.0);
+    vPosition = ModelViewMatrix * vec4(VertexPosition, 1.0);
     // Transform vertex normal to camera coordinates
-    Normal = normalize(NormalMatrix * VertexNormal);
+    vNormal = normalize(NormalMatrix * VertexNormal);
     // Output projected and transformed vertex position
     gl_Position = MVP * mat4(1.0) * vec4(VertexPosition, 1.0);
 }

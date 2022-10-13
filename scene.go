@@ -93,6 +93,8 @@ func (s *Scene) OnKeyDown(evname string, ev interface{}) {
 	e := ev.(*window.KeyEvent)
 	if e.Key == window.KeyEscape {
 		os.Exit(0)
+	} else if e.Key == window.KeyW {
+
 	}
 }
 
