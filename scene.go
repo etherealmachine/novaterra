@@ -53,18 +53,21 @@ func NewScene() *Scene {
 
 	mat := NewMaterial()
 
-	tree := NewTree(math32.Vector3{X: 0, Y: 0, Z: 0}, 32)
+	tree := NewTree(nil, math32.Vector3{X: 0, Y: 0, Z: 0}, 32)
 	noise := opensimplex.New32(0)
-	for x := 0; x < 32; x++ {
-		for z := 0; z < 32; z++ {
-			height := int(((noise.Eval3(float32(x), 0, float32(z)) + 1) / 2) * 16)
+	for x := 0; x < int(tree.Size); x++ {
+		for z := 0; z < int(tree.Size); z++ {
+			maxHeight := int(tree.Size / 2)
+			height := int(((noise.Eval3(float32(x), 0, float32(z)) + 1) / 2) * float32(maxHeight))
 			for y := 0; y < height; y++ {
-				node := tree.At(float32(x-16), float32(y-16), float32(z-16))
+				node := tree.At(float32(x)-tree.Size/2, float32(y)-tree.Size/2, float32(z)-tree.Size/2)
 				node.Material = 1
 			}
 		}
 	}
-	scene.Add(tree.Node(mat))
+	treeNode := tree.Node(mat)
+	treeNode.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
+	scene.Add(treeNode)
 
 	s := &Scene{
 		Node:   scene,
