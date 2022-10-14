@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/g3n/engine/core"
@@ -24,8 +23,11 @@ func NewTree(parent *Node, pos math32.Vector3, size float32) *Node {
 }
 
 func (n *Node) At(x, y, z float32) *Node {
-	if n.Leaf() {
+	if n.Leaf() && n.Contains(x, y, z) {
 		return n
+	}
+	if n.Parent != nil && !n.Contains(x, y, z) {
+		return n.Parent.At(x, y, z)
 	}
 	s := n.Size / 2
 	o := n.Size / 4
@@ -120,19 +122,48 @@ func (n *Node) string() string {
 	return fmt.Sprintf("(%.2f, %.2f, %.2f) %.2f, %d", n.Position.X, n.Position.Y, n.Position.Z, n.Size, n.Material)
 }
 
-func (n *Node) Node(mat *Material) core.INode {
-	log.Println("\n" + n.String())
+func (n *Node) DualContourMesh(mat *Material) core.INode {
+	b := new(GeometryBuilder)
 	n.merge()
-	log.Println("\n" + n.String())
+	n.DFS(func(n *Node, _ int) bool {
+		if n.Material > 0 {
+			s := n.Size
+			h := s / 2
+			neighbor := n.At(n.Position.X, n.Position.Y+s, n.Position.Z)
+			if neighbor == nil || neighbor.Material == 0 {
+				i := b.CurrentTriangleIndex()
+				b.AddVertex(n.Position.X-h, n.Position.Y+s-h, n.Position.Z-h)
+				b.AddVertex(n.Position.X+s-h, n.Position.Y+s-h, n.Position.Z-h)
+				b.AddVertex(n.Position.X-h, n.Position.Y+s-h, n.Position.Z+s-h)
+				b.AddVertex(n.Position.X+s-h, n.Position.Y+s-h, n.Position.Z+s-h)
+				b.AddTriangle(i+0, i+2, i+1)
+				b.AddTriangle(i+1, i+2, i+3)
+			}
+		}
+		return true
+	})
+	root := core.NewNode()
+	g := b.Build()
+	m := graphic.NewMesh(g, mat)
+	root.Add(m)
+	return root
+}
+
+func (n *Node) NaiveVoxelMesh(mat *Material) core.INode {
 	root := core.NewNode()
 	n.DFS(func(n *Node, _ int) bool {
 		if n.Material > 0 {
 			g := geometry.NewCube(n.Size)
 			m := graphic.NewMesh(g, mat)
-			m.SetPosition(n.Position.X, n.Position.Y, n.Position.Z)
+			m.SetPositionVec(&n.Position)
 			root.Add(m)
 		}
 		return true
 	})
 	return root
+}
+
+func (n *Node) MergedVoxelMesh(mat *Material) core.INode {
+	n.merge()
+	return n.NaiveVoxelMesh(mat)
 }

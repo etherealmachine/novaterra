@@ -53,11 +53,11 @@ func NewScene() *Scene {
 
 	mat := NewMaterial()
 
-	tree := NewTree(nil, math32.Vector3{X: 0, Y: 0, Z: 0}, 32)
+	tree := NewTree(nil, math32.Vector3{X: 0, Y: 0, Z: 0}, 8)
 	noise := opensimplex.New32(0)
 	for x := 0; x < int(tree.Size); x++ {
 		for z := 0; z < int(tree.Size); z++ {
-			maxHeight := int(tree.Size / 2)
+			maxHeight := int(0.75 * tree.Size)
 			height := int(((noise.Eval3(float32(x), 0, float32(z)) + 1) / 2) * float32(maxHeight))
 			for y := 0; y < height; y++ {
 				node := tree.At(float32(x)-tree.Size/2, float32(y)-tree.Size/2, float32(z)-tree.Size/2)
@@ -65,9 +65,24 @@ func NewScene() *Scene {
 			}
 		}
 	}
-	treeNode := tree.Node(mat)
-	treeNode.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
-	scene.Add(treeNode)
+
+	n1 := tree.NaiveVoxelMesh(mat)
+	n1.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
+	n1.SetName("n1")
+	n1.SetVisible(true)
+	scene.Add(n1)
+
+	n2 := tree.MergedVoxelMesh(mat)
+	n2.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
+	n2.SetName("n2")
+	n2.SetVisible(false)
+	scene.Add(n2)
+
+	n3 := tree.DualContourMesh(mat)
+	n3.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
+	n3.SetName("n3")
+	n3.SetVisible(false)
+	scene.Add(n3)
 
 	s := &Scene{
 		Node:   scene,
@@ -106,6 +121,15 @@ func (s *Scene) OnKeyDown(evname string, ev interface{}) {
 		if s.mat.Mode >= 3 {
 			s.mat.Mode = 0
 		}
+	} else if e.Key == window.Key1 {
+		n := s.FindPath("/n1")
+		n.SetVisible(!n.Visible())
+	} else if e.Key == window.Key2 {
+		n := s.FindPath("/n2")
+		n.SetVisible(!n.Visible())
+	} else if e.Key == window.Key3 {
+		n := s.FindPath("/n3")
+		n.SetVisible(!n.Visible())
 	}
 }
 
