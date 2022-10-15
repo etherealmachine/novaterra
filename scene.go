@@ -41,15 +41,15 @@ func NewScene() *Scene {
 	cam.SetPosition(60, 65, 25)
 	scene.Add(cam)
 
-	width, height := a.GetFramebufferSize()
+	//width, height := a.GetFramebufferSize()
+	width, height := 1920, 1080
 	a.Gls().Viewport(0, 0, int32(width), int32(height))
 	cam.SetAspect(float32(width) / float32(height))
+	window.Get().(*window.GlfwWindow).SetSize(width, height)
+	//window.Get().(*window.GlfwWindow).SetFullscreen(true)
 
 	axes := helper.NewAxes(32)
 	scene.Add(axes)
-
-	//chunk := NewChunk()
-	//scene.Add(chunk.Mesh())
 
 	mat := NewMaterial()
 
@@ -96,7 +96,6 @@ func NewScene() *Scene {
 	a.SubscribeID(window.OnCursor, a, s.OnMouseMove)
 	a.SubscribeID(window.OnKeyDown, a, s.OnKeyDown)
 	window.Get().(*window.GlfwWindow).SetInputMode(glfw.InputMode(glfw.CursorMode), glfw.CursorDisabled)
-	window.Get().(*window.GlfwWindow).SetFullscreen(true)
 
 	return s
 }
