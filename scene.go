@@ -57,28 +57,29 @@ func NewScene() *Scene {
 	noise := opensimplex.New32(0)
 	for x := 0; x < int(tree.Size); x++ {
 		for z := 0; z < int(tree.Size); z++ {
-			maxHeight := int(0.75 * tree.Size)
+			maxHeight := int(tree.Size)
 			height := int(((noise.Eval3(float32(x), 0, float32(z)) + 1) / 2) * float32(maxHeight))
 			for y := 0; y < height; y++ {
 				node := tree.At(float32(x)-tree.Size/2, float32(y)-tree.Size/2, float32(z)-tree.Size/2)
 				node.Material = 1
+				node.Density = 1
 			}
 		}
 	}
 
-	n1 := tree.NaiveVoxelMesh(mat)
+	n1 := tree.Clone().NaiveVoxelMesh(mat)
 	n1.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
 	n1.SetName("n1")
 	n1.SetVisible(true)
 	scene.Add(n1)
 
-	n2 := tree.MergedVoxelMesh(mat)
+	n2 := tree.Clone().MergedVoxelMesh(mat)
 	n2.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
 	n2.SetName("n2")
 	n2.SetVisible(false)
 	scene.Add(n2)
 
-	n3 := tree.DualContourMesh(mat)
+	n3 := tree.Clone().DualContourMesh(mat)
 	n3.GetNode().SetPosition(tree.Size/2, tree.Size/2, tree.Size/2)
 	n3.SetName("n3")
 	n3.SetVisible(false)
@@ -121,14 +122,17 @@ func (s *Scene) OnKeyDown(evname string, ev interface{}) {
 			s.mat.Mode = 0
 		}
 	} else if e.Key == window.Key1 {
-		n := s.FindPath("/n1")
-		n.SetVisible(!n.Visible())
+		s.FindPath("/n1").SetVisible(true)
+		s.FindPath("/n2").SetVisible(false)
+		s.FindPath("/n3").SetVisible(false)
 	} else if e.Key == window.Key2 {
-		n := s.FindPath("/n2")
-		n.SetVisible(!n.Visible())
+		s.FindPath("/n1").SetVisible(false)
+		s.FindPath("/n2").SetVisible(true)
+		s.FindPath("/n3").SetVisible(false)
 	} else if e.Key == window.Key3 {
-		n := s.FindPath("/n3")
-		n.SetVisible(!n.Visible())
+		s.FindPath("/n1").SetVisible(false)
+		s.FindPath("/n2").SetVisible(false)
+		s.FindPath("/n3").SetVisible(true)
 	}
 }
 

@@ -16,6 +16,7 @@ type Node struct {
 	Parent   *Node
 	Children [8]*Node
 	Material int
+	Density  float32
 }
 
 func NewTree(parent *Node, pos math32.Vector3, size float32) *Node {
@@ -82,27 +83,74 @@ func (n *Node) dfs(fn func(*Node, int) bool, depth int) {
 	}
 }
 
+// prune removes empty children from a node
+func (n *Node) prune() {
+	for i, child := range n.Children {
+		if child.empty() {
+			return
+		}
+		n.Children[i] = nil
+	}
+}
+
+// A node is empty if it has no material or zero density
+// nil nodes are trivially empty
+func (n *Node) empty() bool {
+	return n == nil || n.Material == 0 || n.Density == 0
+}
+
+// A node can be merged if all its children have the same material and non-zero density
+// The node has the material of its children and the average of the densities
 func (n *Node) merge() {
-	mat := 0
+	if n == nil || n.Leaf() {
+		return
+	}
+	n.prune()
+	var density float32
+	var mat *int
+	sameMaterial := false
 	for _, child := range n.Children {
-		if child != nil {
-			child.merge()
-			if mat == 0 {
-				mat = child.Material
-			}
-			if child.Material != mat {
-				return
+		child.merge()
+		if !child.empty() {
+			density += child.Density
+			if mat == nil {
+				mat = &child.Material
+				sameMaterial = true
+			} else if *mat != child.Material {
+				sameMaterial = false
 			}
 		} else {
-			mat = 0
+			sameMaterial = false
 		}
 	}
-	if n.Material == 0 && mat != 0 {
+	if mat != nil && sameMaterial {
+		n.Material = *mat
+		n.Density = density / 8
 		for i := range n.Children {
 			n.Children[i] = nil
 		}
-		n.Material = mat
 	}
+}
+
+func (n *Node) Clone() *Node {
+	return n.clone(nil)
+}
+
+func (n *Node) clone(parent *Node) *Node {
+	if n == nil {
+		return nil
+	}
+	clone := &Node{
+		Position: *n.Position.Clone(),
+		Size:     n.Size,
+		Parent:   parent,
+		Material: n.Material,
+		Density:  n.Density,
+	}
+	for i, child := range n.Children {
+		clone.Children[i] = child.clone(clone)
+	}
+	return clone
 }
 
 func (n *Node) String() string {
@@ -119,18 +167,18 @@ func (n *Node) String() string {
 }
 
 func (n *Node) string() string {
-	return fmt.Sprintf("(%.2f, %.2f, %.2f) %.2f, %d", n.Position.X, n.Position.Y, n.Position.Z, n.Size, n.Material)
+	return fmt.Sprintf("(%.2f, %.2f, %.2f) %.2f, %d, %.2f", n.Position.X, n.Position.Y, n.Position.Z, n.Size, n.Material, n.Density)
 }
 
 func (n *Node) DualContourMesh(mat *Material) core.INode {
 	b := new(GeometryBuilder)
 	n.merge()
 	n.DFS(func(n *Node, _ int) bool {
-		if n.Material > 0 {
+		if !n.empty() {
 			s := n.Size
 			h := s / 2
 			neighbor := n.At(n.Position.X, n.Position.Y+s, n.Position.Z)
-			if neighbor == nil || neighbor.Material == 0 {
+			if neighbor.empty() {
 				i := b.CurrentTriangleIndex()
 				b.AddVertex(n.Position.X-h, n.Position.Y+s-h, n.Position.Z-h)
 				b.AddVertex(n.Position.X+s-h, n.Position.Y+s-h, n.Position.Z-h)
@@ -139,6 +187,7 @@ func (n *Node) DualContourMesh(mat *Material) core.INode {
 				b.AddTriangle(i+0, i+2, i+1)
 				b.AddTriangle(i+1, i+2, i+3)
 			}
+			return false
 		}
 		return true
 	})
@@ -152,11 +201,12 @@ func (n *Node) DualContourMesh(mat *Material) core.INode {
 func (n *Node) NaiveVoxelMesh(mat *Material) core.INode {
 	root := core.NewNode()
 	n.DFS(func(n *Node, _ int) bool {
-		if n.Material > 0 {
+		if !n.empty() {
 			g := geometry.NewCube(n.Size)
 			m := graphic.NewMesh(g, mat)
 			m.SetPositionVec(&n.Position)
 			root.Add(m)
+			return false
 		}
 		return true
 	})
