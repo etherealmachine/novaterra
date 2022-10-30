@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/g3n/engine/core"
@@ -83,29 +84,29 @@ func (n *Node) dfs(fn func(*Node, int) bool, depth int) {
 	}
 }
 
-// prune removes empty children from a node
-func (n *Node) prune() {
-	for i, child := range n.Children {
-		if child.empty() {
-			return
-		}
-		n.Children[i] = nil
-	}
-}
-
 // A node is empty if it has no material or zero density
 // nil nodes are trivially empty
 func (n *Node) empty() bool {
-	return n == nil || n.Material == 0 || n.Density == 0
+	if n == nil {
+		return true
+	}
+	for _, child := range n.Children {
+		if !child.empty() {
+			return false
+		}
+	}
+	return n.Material == 0 || n.Density == 0
 }
 
 // A node can be merged if all its children have the same material and non-zero density
 // The node has the material of its children and the average of the densities
 func (n *Node) merge() {
+	if n != nil {
+		log.Printf("merging %s", n.string())
+	}
 	if n == nil || n.Leaf() {
 		return
 	}
-	n.prune()
 	var density float32
 	var mat *int
 	sameMaterial := false
@@ -123,7 +124,7 @@ func (n *Node) merge() {
 			sameMaterial = false
 		}
 	}
-	if mat != nil && sameMaterial {
+	if mat != nil && sameMaterial && density == 8 {
 		n.Material = *mat
 		n.Density = density / 8
 		for i := range n.Children {
@@ -174,11 +175,11 @@ func (n *Node) DualContourMesh(mat *Material) core.INode {
 	b := new(GeometryBuilder)
 	n.merge()
 	n.DFS(func(n *Node, _ int) bool {
-		if !n.empty() {
+		if n.Material != 0 && n.Density != 0 {
 			s := n.Size
 			h := s / 2
 			neighbor := n.At(n.Position.X, n.Position.Y+s, n.Position.Z)
-			if neighbor.empty() {
+			if neighbor == nil || neighbor.Material == 0 || neighbor.Density == 0 {
 				i := b.CurrentTriangleIndex()
 				b.AddVertex(n.Position.X-h, n.Position.Y+s-h, n.Position.Z-h)
 				b.AddVertex(n.Position.X+s-h, n.Position.Y+s-h, n.Position.Z-h)
@@ -201,7 +202,7 @@ func (n *Node) DualContourMesh(mat *Material) core.INode {
 func (n *Node) NaiveVoxelMesh(mat *Material) core.INode {
 	root := core.NewNode()
 	n.DFS(func(n *Node, _ int) bool {
-		if !n.empty() {
+		if n.Material != 0 && n.Density != 0 {
 			g := geometry.NewCube(n.Size)
 			m := graphic.NewMesh(g, mat)
 			m.SetPositionVec(&n.Position)
